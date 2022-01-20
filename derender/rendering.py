@@ -24,15 +24,15 @@ def get_rotation_matrix(rxyz):
     m_z[:, 2, 2] = 1
     return torch.matmul(m_z, torch.matmul(m_y, m_x))
 
-
+# rotate vertex points
 def rotate_pts(pts, rotmat):
     return pts.matmul(rotmat.transpose(2,1))  # BxNx3
 
-
+# translate vertex points
 def translate_pts(pts, txyz):
     return pts + txyz.unsqueeze(1)  # BxNx3
 
-
+# transform vertex points
 def transform_pts(pts, rxyz=None, txy=None):
     original_shape = pts.shape
     pts = pts.view(original_shape[0],-1,3)
@@ -40,7 +40,8 @@ def transform_pts(pts, rxyz=None, txy=None):
         rotmat = get_rotation_matrix(rxyz).to(pts.device)
         pts = rotate_pts(pts, rotmat)  # BxNx3
     if txy is not None:
-        tz = torch.zeros(len(txy), 1).to(txy.device)
+        tz = torch.zeros(len(txy), 1).to(txy.device) # set z-transform to zero
+        # tz = torch.FloatTensor([[5]]).to(txy.device)
         txyz = torch.cat([txy, tz], 1)
         pts = translate_pts(pts, txyz)  # BxNx3
     return pts.view(*original_shape)

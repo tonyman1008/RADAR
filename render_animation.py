@@ -19,16 +19,20 @@ def load_txts(flist):
 
 def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, spec_alpha, spec_albedo, tx_size):
     b = canon_sor_vtx.size(0)
-    s = 80
-    rxs = torch.linspace(0, np.pi/3, s//2)
-    rxs = torch.cat([rxs, rxs.flip(0)], 0)
-    rys = torch.linspace(0, 2*np.pi, s)
+    s = 80 # sample number
+    rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
+    rxs = torch.cat([rxs, rxs.flip(0)], 0) 
+    rys = torch.linspace(0, 2*np.pi, s) # rotation y axis (pitch)
+    # print("rxs",rxs)
+    # print("rxs",rxs)
     ims = []
     for i, (rx, ry) in enumerate(zip(rxs, rys)):
         rxyz = torch.stack([rx*0, ry, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
         sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, None)
         rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
-        sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
+        test_txy = [[0,0]]
+        txy = torch.FloatTensor(test_txy).to(canon_sor_vtx.device)
+        sor_vtx = rendering.transform_pts(sor_vtx, rxyz, txy)
         sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
         normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
         diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
@@ -138,6 +142,6 @@ def main(in_dir, out_dir):
 
 
 if __name__ == '__main__':
-    in_dir = 'results/met_vase_pretrained/test_results_checkpoint500'
-    out_dir = 'results/met_vase_pretrained/test_results_checkpoint500/animations'
+    in_dir = 'results/Test_20220120_pretrained'
+    out_dir = 'results/Test_20220120_pretrained/animations'
     main(in_dir, out_dir)
