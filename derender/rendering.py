@@ -24,15 +24,15 @@ def get_rotation_matrix(rxyz):
     m_z[:, 2, 2] = 1
     return torch.matmul(m_z, torch.matmul(m_y, m_x))
 
-# rotate vertex points
+## rotate vertex points
 def rotate_pts(pts, rotmat):
     return pts.matmul(rotmat.transpose(2,1))  # BxNx3
 
-# translate vertex points
+## translate vertex points
 def translate_pts(pts, txyz):
     return pts + txyz.unsqueeze(1)  # BxNx3
 
-# transform vertex points
+## transform vertex points
 def transform_pts(pts, rxyz=None, txy=None):
     original_shape = pts.shape
     pts = pts.view(original_shape[0],-1,3)
@@ -40,7 +40,7 @@ def transform_pts(pts, rxyz=None, txy=None):
         rotmat = get_rotation_matrix(rxyz).to(pts.device)
         pts = rotate_pts(pts, rotmat)  # BxNx3
     if txy is not None:
-        tz = torch.zeros(len(txy), 1).to(txy.device) # set z-transform to zero
+        tz = torch.zeros(len(txy), 1).to(txy.device) ## set z-transform to zero
         # tz = torch.FloatTensor([[5]]).to(txy.device)
         txyz = torch.cat([txy, tz], 1)
         pts = translate_pts(pts, txyz)  # BxNx3
@@ -63,23 +63,35 @@ def get_sor_curve(r_col, h_scale):
     sor_curve = torch.stack([r_col, h_col], 2)  # BxHx(r,h)
     return sor_curve
 
-
+## calc sor vertices 
 def get_sor_vtx(sor_curve, T):
     b, h, _ = sor_curve.shape
     rs, hs = sor_curve.unbind(2)  # BxH
+    print("rs",rs.shape)
+    print("hs",hs.shape)
+
     y = hs.view(b,h,1).repeat(1,1,T)  # BxHxT
     thetas = torch.linspace(-math.pi, math.pi, T+1)[:-1].to(sor_curve.device)  # T
     x = rs.unsqueeze(2) * thetas.cos().view(1,1,T)  # BxHxT
     z = rs.unsqueeze(2) * thetas.sin().view(1,1,T)  # BxHxT
     sor_vtx = torch.stack([x, y, z], 3)  # BxHxTx3
+    print("sor_vtx",sor_vtx.shape)
     return sor_vtx
 
 
 def get_sor_full_face_idx(h, w):
+    idx_map_origin = torch.arange(h*w)
+    # print("idx_map_origin",idx_map_origin)
     idx_map = torch.arange(h*w).reshape(h,w)  # HxW
+    # print("idx_map",idx_map)
     idx_map = torch.cat([idx_map, idx_map[:,:1]], 1)  # Hx(W+1), connect last column to first
+    # print("idx_map2",idx_map)
     faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
     faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+
+    ## test
+    # faces3 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
+    # faces4 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
     return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
 
 
@@ -152,15 +164,16 @@ def unwrap_sor_front_tex_im(sor_vtx, tex_im_h, tex_im_w, K, world_ori, im):
     return front_tex_im
 
 
+## lighting model invers gamma function
 GAMMA = 2.2
 def tonemap(img):
     return img.clamp(min=EPS) **(1/GAMMA)
 
-
+## lighting model gamma function
 def gamma(img):
     return img.clamp(min=EPS) **GAMMA
 
-
+## render texture map
 def compose_shading(diff_albedo, diff_map, spec_albedo, spec_map):
     b, c, tex_h, tex_w = diff_albedo.shape
     diff_map = torch.nn.functional.interpolate(diff_map, (tex_h, tex_w), mode='bilinear', align_corners=False)
@@ -241,7 +254,8 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
                             background_color=[1.,1.,1.])
     return renderer
 
-
+# dim_inside : darkness inside texture?
+### render sor shape with texture(final result)
 def render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=4, dim_inside=False, render_normal=False):
     # b, H, T, _ = sor_vtx.shape
     b, _, H_, T_, _ = sor_faces.shape
@@ -315,6 +329,7 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     diffuse, specular = envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
 
     tex_im = compose_shading(albedo, diffuse, spec_albedo, specular).clamp(0,1)
-    im_rendered = render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=tx_size, dim_inside=True).clamp(0, 1)
+    tex_im_2 = compose_shading(albedo, diffuse, spec_albedo, specular).clamp(0,1)
+    im_rendered = render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im_2, tx_size=tx_size, dim_inside=True).clamp(0, 1)
     mask_rendered = renderer.render_silhouettes(sor_vtx.view(b,-1,3), sor_faces.view(b,-1,3))
     return im_rendered, mask_rendered
