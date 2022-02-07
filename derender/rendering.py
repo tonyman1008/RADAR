@@ -2,7 +2,7 @@ import math
 import torch
 import neural_renderer as nr
 from .utils import *
-
+from derender import rendering
 
 EPS = 1e-7
 
@@ -65,6 +65,7 @@ def get_sor_curve(r_col, h_scale):
 
 ## calc sor vertices 
 def get_sor_vtx(sor_curve, T):
+    print("====get_sor_vtx====")
     b, h, _ = sor_curve.shape
     rs, hs = sor_curve.unbind(2)  # BxH
     print("rs",rs.shape)
@@ -80,18 +81,37 @@ def get_sor_vtx(sor_curve, T):
 
 
 def get_sor_full_face_idx(h, w):
+    print("====get_sor_full_face_idx====")
+    print("h",h)
+    print("w",w)
     idx_map_origin = torch.arange(h*w)
-    # print("idx_map_origin",idx_map_origin)
+    print("idx_map_origin",idx_map_origin)
+    ## test
     idx_map = torch.arange(h*w).reshape(h,w)  # HxW
-    # print("idx_map",idx_map)
     idx_map = torch.cat([idx_map, idx_map[:,:1]], 1)  # Hx(W+1), connect last column to first
-    # print("idx_map2",idx_map)
-    faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
-    faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+    print("idx_map shape",idx_map.shape)
+    print("idx_map",idx_map)
+    print("target h",int(h/2)-1)
+    ## test
+    faces1 = torch.stack([idx_map[:int(h/2)-1,:w], idx_map[1:int(h/2),:w], idx_map[:int(h/2)-1,1:w+1]], -1)  # (H-1)xWx3
+    faces2 = torch.stack([idx_map[1:int(h/2),1:w+1], idx_map[:int(h/2)-1,1:w+1], idx_map[1:int(h/2),:w]], -1)  # (H-1)xWx3
+    # faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
+    # faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+    print("faces1",faces1.shape)
+    print("faces2",faces2.shape)
+
+    ## test the index is hard code now
+    faces3 = torch.stack([idx_map[int(h/2):h-1,:w], idx_map[int(h/2)+1:,:w], idx_map[int(h/2):h-1,1:w+1]], -1)  # (H-1)xWx3
+    faces4 = torch.stack([idx_map[int(h/2)+1:,1:w+1], idx_map[int(h/2):h-1,1:w+1], idx_map[int(h/2)+1:,:w]], -1)  # (H-1)xWx3
+    print("faces3",faces3.shape)
+    print("faces4",faces4.shape)
 
     ## test
-    # faces3 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
-    # faces4 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+    faces1 = torch.cat([faces1,faces3],0)
+    faces2 = torch.cat([faces2,faces4],0)
+    print("new faces1",faces1.shape)
+    print("new faces2",faces2.shape)
+
     return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
 
 
@@ -106,9 +126,13 @@ def get_sor_back_face_idx(h, w):
 
 
 def get_tex_uv_grid(ts, h, w):
+    # print("====get_tex_uv_grid====")
     uv_grid = get_grid(h, w, normalize=True)  # -1~1, HxWx(x,y)
     ab_grid = get_grid(ts, ts, normalize=False) / (ts-1)  # 0~1, txtx(x,y)
     ab_grid_uv_offsets = ab_grid * torch.FloatTensor([2/(w-1), 2/(h-1)]).view(1,1,2)
+    # print("uv_grid",uv_grid.shape)
+    # print("ab_grid",ab_grid.shape)
+    # print("ab_grid_uv_offsets",ab_grid_uv_offsets.shape)
 
     tex_uv_grid1 = uv_grid[:-1,:-1,:].view(h-1, w-1, 1, 1, 2) + ab_grid_uv_offsets.view(1, 1, ts, ts, 2)  # (H-1)x(W-1)xtxtx2
     tex_uv_grid2 = uv_grid[1:,1:,:].view(h-1, w-1, 1, 1, 2) - ab_grid_uv_offsets.view(1, 1, ts, ts, 2)  # (H-1)x(W-1)xtxtx2
@@ -221,7 +245,7 @@ def sg_to_env_map(sg_lights, n_elev=8, n_azim=16):
     return env_map
 
 
-def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0.1, renderer_max_depth=10, fill_back=True, device='cuda:0'):
+def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0.1, renderer_max_depth=30, fill_back=True, device='cuda:0'):
     #### camera intrinsics
     #             (u)   (x)
     #    d * K^-1 (v) = (y)
@@ -256,10 +280,18 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
 
 # dim_inside : darkness inside texture?
 ### render sor shape with texture(final result)
-def render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=4, dim_inside=False, render_normal=False):
+def render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im_2, tx_size=4, dim_inside=False, render_normal=False):
     # b, H, T, _ = sor_vtx.shape
+    print("====render_sor====")
+    print("sor_faces",sor_faces.shape)
     b, _, H_, T_, _ = sor_faces.shape
+    print("b",b)
+    print("H_",H_)
+    print("T_",T_)
+    ## test
     tex_uv_grid = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    # print("tex_uv_grid",tex_uv_grid.shape)
 
     if render_normal:
         tx_cube = torch.nn.functional.grid_sample(tex_im, tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
@@ -270,6 +302,10 @@ def render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=4, dim_inside=False
 
     sor_vtx = sor_vtx.reshape(b,-1,3)
     sor_faces = sor_faces.reshape(b,-1,3)
+
+    print("final sor_vtx",sor_vtx.shape)
+    print("final sor_faces",sor_faces.shape)
+
     if dim_inside:
         fill_back = renderer.fill_back
         renderer.fill_back = False
@@ -328,7 +364,13 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     normal_map = get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
     diffuse, specular = envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
 
+    print("albedo",albedo)
+    print("diffuse",diffuse)
+    print("spec_albedo",spec_albedo)
+    print("specular",specular)
     tex_im = compose_shading(albedo, diffuse, spec_albedo, specular).clamp(0,1)
+
+    # test
     tex_im_2 = compose_shading(albedo, diffuse, spec_albedo, specular).clamp(0,1)
     im_rendered = render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im_2, tx_size=tx_size, dim_inside=True).clamp(0, 1)
     mask_rendered = renderer.render_silhouettes(sor_vtx.view(b,-1,3), sor_faces.view(b,-1,3))
