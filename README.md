@@ -1,19 +1,3 @@
-# De-rendering the World's Revolutionary Artefacts
-#### [Project Page](https://sorderender.github.io/) | [Video](https://youtu.be/pxkYyyw02H0) | [Paper](https://arxiv.org/abs/2104.03954)
-
-In CVPR 2021
-
-[Shangzhe Wu](https://elliottwu.com/)<sup>1,4</sup>, [Ameesh Makadia](http://ameeshmakadia.com/index.html)<sup>4</sup>, [Jiajun Wu](https://jiajunwu.com/)<sup>2</sup>, [Noah Snavely](https://www.cs.cornell.edu/~snavely/)<sup>4</sup>, [Richard Tucker](https://research.google/people/RichardTucker/)<sup>4</sup>, [Angjoo Kanazawa](https://people.eecs.berkeley.edu/~kanazawa/)<sup>3,4</sup>
-
-<sup>1</sup> University of Oxford, <sup>2</sup> Stanford University, <sup>3</sup> University of California, Berkeley, <sup>4</sup> Google Research
-
-
-https://user-images.githubusercontent.com/15921740/130113055-30266eee-73a0-4735-9cbe-18e6bf055058.mp4
-
-
-We propose a model that de-renders a single image of a vase into shape, material and environment illumination, trained using only a single image collection, without explicit 3D, multi-view or multi-light supervision.
-
-
 ## Setup (with conda)
 
 ### 1. Install dependencies:
@@ -91,15 +75,4 @@ python eval/eval_syn_vase.py
 To render animations of rotating vases and rotating light, check and run this script:
 ```
 python render_animation.py
-```
-
-
-## Citation
-```
-@InProceedings{wu2021derender,
-  author={Shangzhe Wu and Ameesh Makadia and Jiajun Wu and Noah Snavely and Richard Tucker and Angjoo Kanazawa},
-  title={De-rendering the World's Revolutionary Artefacts},
-  booktitle = {CVPR},
-  year = {2021}
-}
 ```
