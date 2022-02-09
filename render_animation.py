@@ -41,14 +41,14 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
 
         ## rendering multiple objects test
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, txyz)
-        print("sor_vtx",sor_vtx.shape)
+        # print("sor_vtx",sor_vtx.shape)
 
         # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
         # normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
 
         ## test index
-        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:31,:,:])  # Bx(H-1)xTx3
-        normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:31,:,:])  # Bx(H-1)xTx3
+        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+        normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
         diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
         tex_im = rendering.compose_shading(albedo, diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
         # print("sor_vtx_map",sor_vtx_map.shape)
@@ -61,6 +61,7 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
         diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
         tex_im_2 = rendering.compose_shading(albedo, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
+        # print("sor_vtx_map_2",sor_vtx_map_2.shape)
         # utils.save_images(out_dir, tex_im_2.cpu().numpy(), suffix='novel_views_texture2', sep_folder=True)
 
         im_rendered = rendering.render_sor(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1), tex_im, tex_im_2, tx_size=tx_size, dim_inside=False).clamp(0, 1)
