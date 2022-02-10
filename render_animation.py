@@ -20,13 +20,11 @@ def load_txts(flist):
 def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, spec_alpha, spec_albedo, tx_size):
     b = canon_sor_vtx.size(0)
     print("====render_views====",)
-    print("b",b)
     s = 80 # sample number
     rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
     rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
     rys = torch.linspace(0, 2*np.pi, s) # rotation y axis (pitch)
-    # print("rxs",rxs)
-    # print("rxs",rxs)
+
     ims = []
     for i, (rx, ry) in enumerate(zip(rxs, rys)):
 
@@ -43,12 +41,12 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, txyz)
         # print("sor_vtx",sor_vtx.shape)
 
-        # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
-        # normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
 
-        ## test index
-        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
-        normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+        ##TODO:multi-obj
+        # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+        # normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
+        normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
         diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
         tex_im = rendering.compose_shading(albedo, diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
         # print("sor_vtx_map",sor_vtx_map.shape)
@@ -56,9 +54,12 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         # print("diffuse",diffuse.shape)
         # print("specular",specular.shape)
 
+        ##TODO:multi-obj
         ## test second object
-        sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
-        normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
+        # sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
+        # normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
+        sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
+        normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
         diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
         tex_im_2 = rendering.compose_shading(albedo, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
         # print("sor_vtx_map_2",sor_vtx_map_2.shape)
@@ -109,7 +110,7 @@ def main(in_dir, out_dir):
     device = 'cuda:0'
     image_size = 256
     ## vetex grid size = radcol_height * sor_circum
-    radcol_height = 32
+    radcol_height = 32 # radius column & height
     sor_circum = 96
     #
     tex_im_h = 256
@@ -121,9 +122,10 @@ def main(in_dir, out_dir):
     tx_size = 8
     cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
 
+    #TODO:multi-obj
     ## test radcol_height x 2
-    sor_faces = rendering.get_sor_full_face_idx(radcol_height*2, sor_circum).to(device)  # 2x(H-1)xWx3
-    print("face shape",sor_faces.shape)
+    # sor_faces = rendering.get_sor_full_face_idx(radcol_height*2, sor_circum).to(device)  # 2x(H-1)xWx3
+    sor_faces = rendering.get_sor_full_face_idx(radcol_height, sor_circum).to(device)  # 2x(H-1)xWx3
     renderer = rendering.get_renderer(world_ori=[0,0,ori_z], image_size=image_size, fov=fov, fill_back=True, device='cuda:0')
     batch_size = 10
 
@@ -162,23 +164,25 @@ def main(in_dir, out_dir):
         canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum)  # BxHxTx3
         print("canon_sor_vtx origin shape",canon_sor_vtx.shape)
 
-        ## translation test
-        test_txyz = [[0.5,0,0]]
-        txyz = torch.FloatTensor(test_txyz).to(canon_sor_vtx.device)
-        canon_sor_vtx_test = rendering.transform_pts(canon_sor_vtx,None,txyz)
-        canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test],1)
+        #TODO:multi-obj
+        ## translation test | concatenate at dimension 1
+        # test_txyz = [[0.5,0,0]]
+        # txyz = torch.FloatTensor(test_txyz).to(canon_sor_vtx.device)
+        # canon_sor_vtx_test = rendering.transform_pts(canon_sor_vtx,None,txyz)
+        ## test concatenate at dimension 1
+        # canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test],1)
         print("canon_sor_vtx new shape",canon_sor_vtx.shape)
 
-        ## test
-        rxyz = pose[:,:3] /180 *np.pi
-        txy = pose[:,3:]
+        ## test for relighting
+        rxyz = pose[:,:3] / 180 * np.pi # 1x3
+        txy = pose[:,3:] # 1x2
         tz = torch.zeros(len(txy), 1).to(txy.device) ## set z-transform to zero
         txyz = torch.cat([txy, tz], 1)
 
-        sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
-        print("sor_vtx",sor_vtx.shape)
-        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
-        normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
+        sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
+        sor_vtx_map_relighting = rendering.get_sor_quad_center_vtx(sor_vtx_relighting)  # Bx(H-1)xTx3
+        normal_map_relighting = rendering.get_sor_quad_center_normal(sor_vtx_relighting)  # Bx(H-1)xTx3
+
         spec_alpha, spec_albedo = material.unbind(1)
 
         ## test
@@ -189,7 +193,7 @@ def main(in_dir, out_dir):
 
         ## replicate albedo
         wcrop_ratio = 1/6
-        wcrop_tex_im = int(wcrop_ratio *tex_im_w//2)
+        wcrop_tex_im = int(wcrop_ratio * tex_im_w//2)
         albedo = rendering.gamma(albedo)
         p = 8
         front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3)
@@ -197,7 +201,7 @@ def main(in_dir, out_dir):
 
         with torch.no_grad():
             novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
-            # relightings = render_relight(renderer, cam_loc, sor_vtx, sor_vtx_map, sor_faces, normal_map, albedo_replicated, spec_alpha, spec_albedo, tx_size)
+            # relightings = render_relight(renderer, cam_loc, sor_vtx_relighting, sor_vtx_map_relighting, sor_faces, normal_map_relighting, albedo_replicated, spec_alpha, spec_albedo, tx_size)
             [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
             utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
             # [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]

@@ -2,7 +2,6 @@ import math
 import torch
 import neural_renderer as nr
 from .utils import *
-from derender import rendering
 
 EPS = 1e-7
 
@@ -65,20 +64,46 @@ def get_sor_curve(r_col, h_scale):
     sor_curve = torch.stack([r_col, h_col], 2)  # BxHx(r,h)
     return sor_curve
 
-## calc sor vertices 
+## calculate sor vertices 
 def get_sor_vtx(sor_curve, T):
     print("====get_sor_vtx====")
     b, h, _ = sor_curve.shape
-    rs, hs = sor_curve.unbind(2)  # BxH
+    print("sor_curve",sor_curve.shape)
+    rs, hs = sor_curve.unbind(2)  # BxH radius column & height
     print("rs",rs.shape)
     print("hs",hs.shape)
 
+    ## calculate the sor vertices 3d coordinates
     y = hs.view(b,h,1).repeat(1,1,T)  # BxHxT
+    
+    ## 360 degree sor_shape vertices, T=96
     thetas = torch.linspace(-math.pi, math.pi, T+1)[:-1].to(sor_curve.device)  # T
     x = rs.unsqueeze(2) * thetas.cos().view(1,1,T)  # BxHxT
     z = rs.unsqueeze(2) * thetas.sin().view(1,1,T)  # BxHxT
+    print("x",x.shape)
+    print("y",y.shape)
+    print("z",z.shape)
     sor_vtx = torch.stack([x, y, z], 3)  # BxHxTx3
     print("sor_vtx",sor_vtx.shape)
+
+    ## rotation axis test
+    #TODO:bending axis
+    s = sor_vtx.shape[1] # sample number
+    print("sample number",s)
+    rzs = torch.linspace(np.pi/9, 0, s) # rotation x axis (roll)
+
+    for i,rz in enumerate(rzs):
+        print("rz",rz)
+        print("i",i)
+        ## rotate y-axis first then rotate x-axis
+        rotate_sor_vtx_one_row = sor_vtx[:,i,:,:].to(sor_vtx.device)
+        rxyz = torch.stack([rz*0, rz*0, rz], 0).unsqueeze(0).to(sor_vtx.device)
+        print("rotate_sor_vtx_one_row",rotate_sor_vtx_one_row.shape)
+        print("rxyz",rxyz.shape)
+        rotate_sor_vtx_one_row = transform_pts(rotate_sor_vtx_one_row, rxyz, None)
+        sor_vtx[:,i,:,:] = rotate_sor_vtx_one_row
+        print("sor_vtx",sor_vtx.shape)
+    
     return sor_vtx
 
 
@@ -92,31 +117,33 @@ def get_sor_full_face_idx(h, w):
     print("idx_map shape",idx_map.shape)
     print("idx_map",idx_map)
     ## test
-    faces1 = torch.stack([idx_map[:h//2-1,:w], idx_map[1:h//2,:w], idx_map[:h//2-1,1:w+1]], -1)  # (H-1)xWx3
-    faces2 = torch.stack([idx_map[1:h//2,1:w+1], idx_map[:h//2-1,1:w+1], idx_map[1:h//2,:w]], -1)  # (H-1)xWx3
+    ##TODO:multi-obj
+    # faces1 = torch.stack([idx_map[:h//2-1,:w], idx_map[1:h//2,:w], idx_map[:h//2-1,1:w+1]], -1)  # (H-1)xWx3
+    # faces2 = torch.stack([idx_map[1:h//2,1:w+1], idx_map[:h//2-1,1:w+1], idx_map[1:h//2,:w]], -1)  # (H-1)xWx3
 
     ## 2 triangles(faces) vertice index 
-    # faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
-    # faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+    faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
+    faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
     print("faces1",faces1.shape)
     print("faces2",faces2.shape)
 
     ## test the index is hard code now
-    faces3 = torch.stack([idx_map[h//2:h-1,:w], idx_map[h//2+1:,:w], idx_map[h//2:h-1,1:w+1]], -1)  # (H-1)xWx3
-    faces4 = torch.stack([idx_map[h//2+1:,1:w+1], idx_map[h//2:h-1,1:w+1], idx_map[h//2+1:,:w]], -1)  # (H-1)xWx3
-    print("faces3",faces3.shape)
-    print("faces4",faces4.shape)
+    # faces3 = torch.stack([idx_map[h//2:h-1,:w], idx_map[h//2+1:,:w], idx_map[h//2:h-1,1:w+1]], -1)  # (H-1)xWx3
+    # faces4 = torch.stack([idx_map[h//2+1:,1:w+1], idx_map[h//2:h-1,1:w+1], idx_map[h//2+1:,:w]], -1)  # (H-1)xWx3
+    # print("faces3",faces3.shape)
+    # print("faces4",faces4.shape)
 
-    ## test
-    full_face_obj1 = torch.stack([faces1, faces3], 0).int()
-    full_face_obj2 = torch.stack([faces2, faces4], 0).int()
-    print("full_face_obj1",full_face_obj1.shape)
-    print("full_face_obj2",full_face_obj2.shape)
-    full_face_allObjects = torch.cat([full_face_obj1,full_face_obj2],1)
-    print("full_face_allObjects",full_face_allObjects.shape)
+    ##TODO:multi-obj
+    # full_face_obj1 = torch.stack([faces1, faces3], 0).int()
+    # full_face_obj2 = torch.stack([faces2, faces4], 0).int()
+    # print("full_face_obj1",full_face_obj1.shape)
+    # print("full_face_obj2",full_face_obj2.shape)
+    # full_face_allObjects = torch.cat([full_face_obj1,full_face_obj2],1)
+    # print("full_face_allObjects",full_face_allObjects.shape)
 
-    return full_face_allObjects  # 2x(H-1)xWx3
-    # return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
+    ##TODO:multi-obj
+    # return full_face_allObjects  # 2x(H-1)xWx3
+    return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
 
 
 def get_sor_front_face_idx(h, w):
@@ -292,11 +319,11 @@ def render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im_2, tx_size=4, dim_ins
     # print("sor_vtx",sor_vtx.shape)
     b, _, H_, T_, _ = sor_faces.shape
     
-    ## test (dimension B?)
-    tex_uv_grid = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    # tex_uv_grid = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    # tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    ##TODO:multi-obj (dimension B?)
+    # tex_uv_grid = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    # tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    tex_uv_grid = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
     # print("tex_uv_grid",tex_uv_grid.shape)
 
     if render_normal:
@@ -340,7 +367,7 @@ def render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im_2, tx_size=4, dim_ins
         # print("tx_cube",tx_cube.shape)
         # print("tx_cube2",tx_cube2.shape)
 
-        tx_cube=torch.cat([tx_cube,tx_cube2],1)
+        # tx_cube=torch.cat([tx_cube,tx_cube2],1)
 
         # print("final sor_vtx",sor_vtx.shape)
         # print("final sor_faces",sor_faces.shape)
