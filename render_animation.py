@@ -41,10 +41,10 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, txyz)
         # print("sor_vtx",sor_vtx.shape)
 
-
         ##TODO:multi-obj
         # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
         # normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+
         sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
         normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
         diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
@@ -58,14 +58,14 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         ## test second object
         # sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
         # normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
-        sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
-        normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
-        diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
-        tex_im_2 = rendering.compose_shading(albedo, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
+        # sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
+        # normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
+        # diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
+        # tex_im_2 = rendering.compose_shading(albedo, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
         # print("sor_vtx_map_2",sor_vtx_map_2.shape)
         # utils.save_images(out_dir, tex_im_2.cpu().numpy(), suffix='novel_views_texture2', sep_folder=True)
 
-        im_rendered = rendering.render_sor(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1), tex_im, tex_im_2, tx_size=tx_size, dim_inside=False).clamp(0, 1)
+        im_rendered = rendering.render_sor(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1), tex_im, tx_size=tx_size, dim_inside=False).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
@@ -145,11 +145,6 @@ def main(in_dir, out_dir):
         print("Rendering %d-%d/%d" %(b0, b1, total_num))
 
         sor_curve = sor_curve_all[b0:b1].to(device)
-        print("origin sor_curve",sor_curve.shape)
-        ## test
-        # sor_cur_test = torch.clone(sor_curve)
-        # sor_curve = torch.cat([sor_curve,sor_cur_test],1)
-        # print("after sor_curve",sor_curve.shape)
         
         albedo = albedo_all[b0:b1].to(device)
         mask_gt = mask_gt_all[b0:b1].to(device)
@@ -165,12 +160,15 @@ def main(in_dir, out_dir):
         print("canon_sor_vtx origin shape",canon_sor_vtx.shape)
 
         #TODO:multi-obj
-        ## translation test | concatenate at dimension 1
-        # test_txyz = [[0.5,0,0]]
-        # txyz = torch.FloatTensor(test_txyz).to(canon_sor_vtx.device)
-        # canon_sor_vtx_test = rendering.transform_pts(canon_sor_vtx,None,txyz)
-        ## test concatenate at dimension 1
-        # canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test],1)
+        # translation test | concatenate at dimension 1
+        # test_txyz = torch.tensor([[0.5,0,0]]).to(canon_sor_vtx.device)
+        # test_rxyz = torch.tensor([[0,0,np.pi/2]]).to(canon_sor_vtx.device)
+        # canon_sor_vtx_test = rendering.transform_pts(canon_sor_vtx,None,test_txyz)
+        # canon_sor_vtx_test_bend = rendering.bend_main_axis_rotate_vtx(canon_sor_vtx_test)
+
+        # test concatenate at dimension 1
+        #TODO:multi-obj
+        # canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test_bend],1)
         print("canon_sor_vtx new shape",canon_sor_vtx.shape)
 
         ## test for relighting
@@ -209,6 +207,6 @@ def main(in_dir, out_dir):
 
 
 if __name__ == '__main__':
-    in_dir = 'results/Test_20220120_pretrained'
-    out_dir = 'results/Test_20220120_pretrained/animations'
+    in_dir = 'results/TestResults_20220218_Bending_BlackBG_Pretrain-Syn'
+    out_dir = 'results/TestResults_20220218_Bending_BlackBG_Pretrain-Syn/animations'
     main(in_dir, out_dir)
