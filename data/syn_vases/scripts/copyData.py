@@ -21,8 +21,8 @@ def copyImageAndMaskData(inPath,outPath):
         shutil.copy(mask_path,masks_out_dir)
 
 if __name__ == '__main__':
-    in_dir = '../syn_curv_sgl5_tex_straight/rendering'
-    out_dir = '../syn_curv_sgl5_tex_straight/image_mask'
+    in_dir = '../syn_curv_sgl5_tex_straight_20220220/rendering'
+    out_dir = '../syn_curv_sgl5_tex_straight_20220220/image_mask'
 
     for split in ['train','test','val']:
         copyImageAndMaskData(os.path.join(in_dir,split),os.path.join(out_dir,split))

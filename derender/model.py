@@ -7,7 +7,7 @@ import torchvision
 from .networks import SoRNet, EnvMapNet, DiscNet
 from .GAN import UnetGenerator, GANLoss, set_requires_grad
 from . import utils, rendering
-
+import numpy as np
 
 class Derenderer():
     def __init__(self, cfgs):
@@ -37,6 +37,10 @@ class Derenderer():
         self.spec_albedo_max = cfgs.get('spec_albedo_max', 1.)
         self.tx_size = cfgs.get('tx_size', 4)
         self.renderer = rendering.get_renderer(world_ori=[0, 0, self.ori_z], image_size=self.image_size, fov=self.fov, fill_back=True, device=self.device)
+
+        ##TODO Testing
+        self.in_dir = cfgs.get('test_data_dir',None) ## Testing
+
 
         ## losses
         self.lam_mask = cfgs.get('lam_mask', 1)
@@ -194,7 +198,8 @@ class Derenderer():
         self.mask_gt_dt = mask_gt_dt.to(self.device)
         b, c, h, w = self.input_im.shape
 
-        ## predict sor and pose
+        ## TODO:replace this part to be known 3d object vertices
+        ## predict sor and pose 
         self.rad_col, pose_pred = self.netR(self.input_im *2-1)  # BxH, 0~1
         self.rad_col = self.rad_col_rescaler(self.rad_col)
         self.hscale, self.rx, self.rz, self.tx, self.ty = pose_pred.unbind(1)  # 0~1
@@ -207,6 +212,7 @@ class Derenderer():
         self.txy = torch.stack([self.tx, self.ty], 1)
         self.txy = self.txy_rescaler(self.txy)
 
+        ## get sor vertices map
         self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum)  # BxHxTx3
         self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, self.rxyz, self.txy)
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
@@ -268,6 +274,143 @@ class Derenderer():
         self.loss_diffuse_reg = (((self.diffuse_mean - self.diffuse_reg_mean).abs() -self.diffuse_reg_margin).clamp(min=0.) **2).mean()
 
         ## total loss
+        # print("loss mask",self.loss_mask)
+        # print("loss mask dt",self.loss_mask_dt)
+        # print("loss iamge",self.loss_im)
+        # print("loss mean albedo",self.loss_mean_albedo_im)
+        # print("loss diffuse reg",self.loss_diffuse_reg)
+
+        self.loss_total = self.lam_mask*self.loss_mask + self.lam_mask_dt*self.loss_mask_dt + self.lam_im*self.loss_im + self.lam_mean_albedo_im*self.loss_mean_albedo_im + self.lam_diffuse_reg*self.loss_diffuse_reg
+        metrics = {'loss': self.loss_total}
+
+        ## for visualization
+        self.front_im_rendered_masked = self.front_im_rendered *im_loss_mask
+        self.mean_albedo_front_im_rendered_masked = self.mean_albedo_front_im_rendered *im_loss_mask
+        self.albedo = rendering.tonemap(self.albedo)
+        self.mean_albedo = rendering.tonemap(self.mean_albedo)
+
+        return metrics
+
+    def forward_test(self, input):
+        print("====forward_test====")
+        if isinstance(input, tuple) or isinstance(input, list):
+            input_im, mask_gt, mask_gt_dt = input
+            print("input",input)
+            mask_gt = mask_gt[:,0,:,:]
+            mask_gt_dt = mask_gt_dt / self.image_size
+        else:
+            input_im = input
+            mask_gt = input_im[:,0,:,:] *0+1
+            mask_gt_dt = input_im[:,0,:,:] *0
+        self.input_im = input_im.to(self.device)
+        self.mask_gt = mask_gt.to(self.device)
+        self.mask_gt_dt = mask_gt_dt.to(self.device)
+        b, c, h, w = self.input_im.shape
+
+        ## TODO:test
+        self.sor_curve_custom = utils.load_txts(glob.glob(os.path.join(self.in_dir, '*_sor_curve.txt')))
+        self.pitch_custom = utils.load_txts(glob.glob(os.path.join(self.in_dir, '*_pitch.txt')))/180*math.pi
+        print("sor_curve_custom",self.sor_curve_custom.shape)
+        print("pitch_custom",self.pitch_custom.shape)
+
+        ## origin pose generator from generate_synvase.py
+        self.rxyz_custom = torch.stack([self.pitch_custom, torch.zeros_like(self.pitch_custom), torch.zeros_like(self.pitch_custom)], 1).to(self.device)
+        print("rxyz_custom",self.rxyz_custom)
+        # posed_sor_vtx = transform_sor(sor_vtx.view(b,-1,3), rxyz, txy=None).view(b,H,T,3)
+
+        ## TODO:replace this part to be known 3d object vertices
+        ## predict sor and pose 
+        self.rad_col, pose_pred = self.netR(self.input_im *2-1)  # BxH, 0~1
+        print("rad_col",self.rad_col.shape)
+        print("rad_col",self.rad_col)
+        self.rad_col = self.rad_col_rescaler(self.rad_col)
+        print("rad_col",self.rad_col)
+        self.hscale, self.rx, self.rz, self.tx, self.ty = pose_pred.unbind(1)  # 0~1
+        self.hscale = self.hscale_rescaler(self.hscale)
+
+        # self.sor_curve = rendering.get_sor_curve(self.rad_col, self.hscale) *self.max_range
+        # print("sor_curve",self.sor_curve.shape)
+        ##TODO: use custom data to replace sor curve
+        self.sor_curve = self.sor_curve_custom.clone().to(self.device)
+
+        self.rx = self.rx_rescaler(self.rx)
+        self.rz = self.rz_rescaler(self.rz)
+        # self.rxyz = torch.stack([self.rx, torch.zeros_like(self.rx), self.rz], 1)
+        ##TODO: use custom data to replace sor curve
+        self.rxyz = self.rxyz_custom.clone()
+        # self.txy = torch.stack([self.tx, self.ty], 1)
+        # self.txy = self.txy_rescaler(self.txy)
+        self.txy = torch.zeros(1,2).to(self.device)
+        print("self.txy",self.txy.shape)
+
+        ## get sor vertices map
+        self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum)  # BxHxTx3
+        self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, self.rxyz, self.txy)
+        self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
+
+        ## render mask
+        self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
+
+        ## sample frontal texture map
+        self.sor_vtx_map = rendering.get_sor_quad_center_vtx(self.sor_vtx)  # Bx(H-1)xTx3
+        wcrop_tex_im = int(self.wcrop_ratio *self.tex_im_w//2)
+        self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z], self.input_im)
+
+        ## predict albedo
+        self.front_tex_im_gt_cropped = self.front_tex_im_gt[:,:,:,wcrop_tex_im:-wcrop_tex_im]  # 128x128
+        self.albedo = self.netT(self.front_tex_im_gt_cropped *2-1) /2+0.5
+        self.albedo = torch.nn.functional.pad(self.albedo, (wcrop_tex_im,wcrop_tex_im,0,0), mode='replicate')
+
+        ## replicate back side
+        self.albedo = torch.cat([self.albedo, self.albedo.flip(3)], 3)
+
+        ## shading
+        wcrop_sor = int(self.wcrop_ratio*self.sor_circum//2)
+        normal_map_cropped = self.normal_map[:,:,wcrop_sor:self.sor_circum//2-wcrop_sor,:]
+        normal_map_cropped = torch.nn.functional.interpolate(normal_map_cropped.permute(0,3,1,2), (self.tex_im_h, self.tex_im_w//2-wcrop_tex_im*2), mode='bilinear', align_corners=False)
+        normal_map_cropped = normal_map_cropped / (normal_map_cropped**2).sum(1,keepdim=True)**0.5
+        light_input = torch.cat([self.front_tex_im_gt_cropped *2-1, normal_map_cropped], 1)
+        self.env_map, self.light_params = self.netE(light_input)
+        self.env_map = self.env_map.squeeze(1)  # 0~1
+        self.spec_alpha = self.spec_alpha_rescaler(self.light_params[:,0])
+        self.spec_albedo_scalar = self.spec_albedo_rescaler(self.light_params[:,1])
+        self.spec_albedo = self.spec_albedo_scalar.view(b,1,1,1)
+        cam_loc = torch.FloatTensor([0,0,-self.ori_z]).to(self.device)
+        self.diffuse, self.specular = rendering.envmap_phong_shading(self.sor_vtx_map, self.normal_map, cam_loc, self.env_map, self.spec_alpha)
+        self.tex_im = rendering.compose_shading(self.albedo, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
+
+        ## render
+        self.front_tex_im = self.tex_im[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im]
+        self.front_sor_faces = self.sor_faces[:,:,wcrop_sor:self.sor_circum//2-wcrop_sor].repeat(b,1,1,1,1)
+        self.front_mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.front_sor_faces.reshape(b,-1,3))
+        self.front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        im_loss_mask = (self.front_mask_rendered * self.mask_gt).unsqueeze(1)
+        im_loss_mask = im_loss_mask.expand_as(self.input_im).detach()
+
+        ## render with mean albedo
+        mean_albedo = self.albedo[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im].reshape(b,3,-1).mean(2)
+        self.mean_albedo = mean_albedo.view(b,3,1,1).expand_as(self.albedo)
+        self.mean_albedo_tex_im = rendering.compose_shading(self.mean_albedo, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
+        self.mean_albedo_front_tex_im = self.mean_albedo_tex_im[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im]
+        self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+
+        ## losses
+        self.loss_mask = ((self.mask_rendered - self.mask_gt)**2).view(b,-1).mean(1).mean()
+        self.loss_mask_dt = (self.mask_rendered * self.mask_gt_dt).view(b,-1).mean(1).mean()
+        self.loss_im = ((((self.front_im_rendered - self.input_im).abs()) *im_loss_mask).reshape(b,-1).sum(1) / im_loss_mask.reshape(b,-1).sum(1)).mean()
+        self.loss_mean_albedo_im = ((((self.mean_albedo_front_im_rendered - self.input_im).abs()) *im_loss_mask).reshape(b,-1).sum(1) / im_loss_mask.reshape(b,-1).sum(1)).mean()
+
+        ## diffuse consistency regularizer
+        self.diffuse_mean = self.diffuse[:,:,:,wcrop_sor:self.sor_circum//2-wcrop_sor].reshape(b,-1).mean(1)
+        self.loss_diffuse_reg = (((self.diffuse_mean - self.diffuse_reg_mean).abs() -self.diffuse_reg_margin).clamp(min=0.) **2).mean()
+
+        ## total loss
+        # print("loss mask",self.loss_mask)
+        # print("loss mask dt",self.loss_mask_dt)
+        # print("loss iamge",self.loss_im)
+        # print("loss mean albedo",self.loss_mean_albedo_im)
+        # print("loss diffuse reg",self.loss_diffuse_reg)
+
         self.loss_total = self.lam_mask*self.loss_mask + self.lam_mask_dt*self.loss_mask_dt + self.lam_im*self.loss_im + self.lam_mean_albedo_im*self.loss_mean_albedo_im + self.lam_diffuse_reg*self.loss_diffuse_reg
         metrics = {'loss': self.loss_total}
 

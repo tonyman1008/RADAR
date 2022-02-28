@@ -207,6 +207,6 @@ def main(in_dir, out_dir):
 
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220218_Bending_BlackBG_Pretrain-Syn'
-    out_dir = 'results/TestResults_20220218_Bending_BlackBG_Pretrain-Syn/animations'
+    in_dir = 'results/TestResults_20220225_CustomSoR'
+    out_dir = 'results/TestResults_20220225_CustomSoR/animations'
     main(in_dir, out_dir)

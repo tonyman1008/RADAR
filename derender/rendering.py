@@ -125,14 +125,14 @@ def bend_main_axis_rotate_vtx(sor_vtx):
     return sor_vtx
 
 def get_sor_full_face_idx(h, w):
-    print("====get_sor_full_face_idx====")
-    print("h",h)
-    print("w",w)
+    # print("====get_sor_full_face_idx====")
+    # print("h",h)
+    # print("w",w)
     ## test
     idx_map = torch.arange(h*w).reshape(h,w)  # HxW
     idx_map = torch.cat([idx_map, idx_map[:,:1]], 1)  # Hx(W+1), connect last column to first
-    print("idx_map shape",idx_map.shape)
-    print("idx_map",idx_map)
+    # print("idx_map shape",idx_map.shape)
+    # print("idx_map",idx_map)
     ## test
     ##TODO:multi-obj
     # faces1 = torch.stack([idx_map[:h//2-1,:w], idx_map[1:h//2,:w], idx_map[:h//2-1,1:w+1]], -1)  # (H-1)xWx3
@@ -141,8 +141,8 @@ def get_sor_full_face_idx(h, w):
     # ##origin 2 triangles(faces) vertice index 
     faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
     faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
-    print("faces1",faces1.shape)
-    print("faces2",faces2.shape)
+    # print("faces1",faces1.shape)
+    # print("faces2",faces2.shape)
 
     ##TODO:multi-obj
     ## test the index is hard code now

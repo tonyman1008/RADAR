@@ -3,7 +3,7 @@
 run_train: true
 num_epochs: 200
 batch_size: 24
-checkpoint_dir: results/syn_vase_straight_20220220
+checkpoint_dir: results/syn_vase_straight_20220220_2
 save_checkpoint_freq: 50
 keep_num_checkpoint: 5  # -1 for keeping all checkpoints
 resume: true

@@ -278,7 +278,7 @@ def get_random_sor_curve(b, H):
     # r_col = r_col / r_col.max(1)[0].view(b,1) *0.75  # normalize to 0.75
 
     ## TODO:straight axis testing
-    r_col = (torch.rand(b)*0.75).repeat(1,32) 
+    r_col = (torch.rand(b).clamp(0.4,1)*0.75).repeat(1,32) 
 
     h_scale = torch.zeros(b) + 0.75
     h_col = torch.linspace(-1,1,H).view(1,H) *h_scale.view(b,1)
@@ -370,6 +370,8 @@ def generate(cc0_tex_dir, out_dir):
 
             sor_curve = get_random_sor_curve(b,H).to(device) *lim  # BxHx2
             sor_vtx = get_sor_vtx(sor_curve, T)  # BxHxTx3
+
+            ## render rotation pitch rotation
             pitch = get_random_pitch(b).to(device)
             rxyz = torch.stack([pitch, torch.zeros_like(pitch), torch.zeros_like(pitch)], 1)
             posed_sor_vtx = transform_sor(sor_vtx.view(b,-1,3), rxyz, txy=None).view(b,H,T,3)
@@ -437,7 +439,7 @@ def generate(cc0_tex_dir, out_dir):
 
 if __name__ == '__main__':
     cc0_tex_dir = '../cc0_textures/PhotoTexturePBR'
-    out_dir = '../syn_curv_sgl5_tex_straight/rendering'
+    out_dir = '../syn_curv_sgl5_tex_straight_20220220/rendering'
 
     for split in ['train', 'test']:
         print(f'Generating {split} set...')

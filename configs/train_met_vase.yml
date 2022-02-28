@@ -3,7 +3,7 @@
 run_train: true
 num_epochs: 500
 batch_size: 24
-checkpoint_dir: results/met_vase
+checkpoint_dir: traingResults/met_vase_trainingTest
 save_checkpoint_freq: 50
 keep_num_checkpoint: 5  # -1 for keeping all checkpoints
 resume: true

@@ -219,3 +219,9 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
     xy_grid = xy0.view(b*num_patch,1,1,2) + (xy_grid+1) *wh.view(b*num_patch,1,1,2)
     patches = torch.nn.functional.grid_sample(im.repeat(num_patch,1,1,1), xy_grid.to(im.device), mode='bilinear', align_corners=False).view(num_patch,b,c,patch_size,patch_size).transpose(1,0)
     return patches  # BxNxCxHxW
+
+def load_imgs(flist):
+    return torch.stack([torch.FloatTensor(cv2.imread(f) /255.).flip(2) for f in flist], 0).permute(0,3,1,2)
+
+def load_txts(flist):
+    return torch.stack([torch.FloatTensor(np.loadtxt(f, delimiter=',')) for f in flist], 0)

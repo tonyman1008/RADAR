@@ -143,10 +143,11 @@ class Trainer():
             self.model.set_eval()
 
         for iter, input in enumerate(loader):
-            m = self.model.forward(input)
             if is_train:
+                m = self.model.forward(input)
                 self.model.backward()
             elif is_test:
+                m = self.model.forward_test(input)
                 self.model.save_results(self.test_result_dir)
 
             metrics.update(m, self.batch_size)
