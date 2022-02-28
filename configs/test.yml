@@ -4,7 +4,7 @@ run_test: true
 batch_size: 1
 checkpoint_dir: results/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220225_CustomSoR
+test_result_dir: results/TestResults_20220228_CustomSoR
 
 ## dataloader
 image_size: 256
@@ -17,7 +17,7 @@ test_custom_sor: data/
 ## model
 model_name: derender_vase
 radcol_height: 32
-sor_circum: 96
+sor_circum: 24
 tex_im_h: 256
 tex_im_w: 768
 min_hscale: 0.5
@@ -30,7 +30,7 @@ xy_translation_range: 0.2  # ratio of (roughly) image size in 3D
 spec_albedo_min: 0.1
 spec_albedo_max: 2.0
 env_map_h: 16
-env_map_w: 48
+env_map_w: 24
 
 ## losses
 lam_mask: 10

@@ -347,6 +347,8 @@ class Derenderer():
         self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum)  # BxHxTx3
         self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, self.rxyz, self.txy)
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
+        print("canon_sor_vtx",self.canon_sor_vtx.shape)
+        print("b",b)
 
         ## render mask
         self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))

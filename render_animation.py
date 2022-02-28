@@ -111,7 +111,7 @@ def main(in_dir, out_dir):
     image_size = 256
     ## vetex grid size = radcol_height * sor_circum
     radcol_height = 32 # radius column & height
-    sor_circum = 96
+    sor_circum = 24 ##TODO: set sor_circum to 24 fit 3sweep object
     #
     tex_im_h = 256
     tex_im_w = 768 ## 256*3 => 3 times width of texture
@@ -207,6 +207,6 @@ def main(in_dir, out_dir):
 
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220225_CustomSoR'
-    out_dir = 'results/TestResults_20220225_CustomSoR/animations'
+    in_dir = 'results/TestResults_20220228_CustomSoR'
+    out_dir = 'results/TestResults_20220228_CustomSoR/animations'
     main(in_dir, out_dir)
