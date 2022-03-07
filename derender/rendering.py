@@ -161,6 +161,11 @@ def get_sor_full_face_idx(h, w):
 
     ##TODO:multi-obj
     # return full_face_allObjects  # 2x(H-1)xWx3
+
+    # print("idxMap",idx_map[0,0])
+    # print("idxMap",idx_map[1,0])
+    # print("idxMap",idx_map[0,1])
+
     return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
 
 
@@ -296,6 +301,16 @@ def sg_to_env_map(sg_lights, n_elev=8, n_azim=16):
 
 
 def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0.1, renderer_max_depth=30, fill_back=True, device='cuda:0'):
+    ''' Projection Renderer
+    Calculate projective transformation of vertices given a projection matrix
+    Input parameters:
+    K: batch_size * 3 * 3 intrinsic camera matrix
+    R, t: batch_size * 3 * 3, batch_size * 1 * 3 extrinsic calibration parameters
+    dist_coeffs: vector of distortion coefficients
+    orig_size: original size of image captured by the camera
+    Returns: For each point [X,Y,Z] in world coordinates [u,v,z] where u,v are the coordinates of the projection in
+    pixels and z is the depth
+    '''
     #### camera intrinsics
     #             (u)   (x)
     #    d * K^-1 (v) = (y)
@@ -311,9 +326,14 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
     fy = image_size /2 /(math.tan(fov/2 *math.pi/180))
     cx = image_size /2
     cy = image_size /2
+    print("fx",fx)
+    print("fy",fx)
+    print("cx",cx)
+    print("cy",cy)
     K = [[fx, 0., cx],
          [0., fy, cy],
          [0., 0., 1.]]
+    print("K",K)
     K = torch.FloatTensor(K).to(device)
     inv_K = torch.inverse(K).unsqueeze(0)
     K = K.unsqueeze(0)

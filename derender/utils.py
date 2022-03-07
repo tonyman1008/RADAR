@@ -220,6 +220,23 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
     patches = torch.nn.functional.grid_sample(im.repeat(num_patch,1,1,1), xy_grid.to(im.device), mode='bilinear', align_corners=False).view(num_patch,b,c,patch_size,patch_size).transpose(1,0)
     return patches  # BxNxCxHxW
 
+def parse3SweepVertices(origin_sor_vtx):
+    print("====parse3SweepVertices====")
+    origin_sor_vtx[26:48] = torch.flip(origin_sor_vtx[26:48],[0])
+    new_sor_vtx = origin_sor_vtx.clone()
+    # print("new_sor_vtx[24]",new_sor_vtx[24])
+    # print("new_sor_vtx[47]",new_sor_vtx[47])
+    new_sor_vtx = torch.roll(new_sor_vtx,-24,0)
+    new_sor_vtx[0:24] = origin_sor_vtx[0:24]
+    new_sor_vtx[-24:] = origin_sor_vtx[24:48]
+    # print("new_sor_vtx[0]",new_sor_vtx[0])
+    # print("origin_sor_vtx[0]",origin_sor_vtx[0])
+    # print("new_sor_vtx[-24]",new_sor_vtx[-24])
+    # print("origin_sor_vtx[24]",origin_sor_vtx[24])
+    # print("origin_sor_vtx",origin_sor_vtx.shape)
+    # print("new_sor_vtx",new_sor_vtx.shape)
+    return new_sor_vtx
+
 def load_imgs(flist):
     return torch.stack([torch.FloatTensor(cv2.imread(f) /255.).flip(2) for f in flist], 0).permute(0,3,1,2)
 
