@@ -5,8 +5,44 @@ import torch
 import math
 from derender import utils, rendering
 import numpy as np
+import sys
+
+
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
+
+def parse3SweepObjData(vertices,faces,textures):
+    ## because the 3-sweep index method need to parse the data to fit RADAR indexing method
+    
+    ## Parameter
+    rowIndexOffset = 5
+    rowVertices = 24
+    verticesNum = vertices.shape[0]
+    rad_col = verticesNum / rowVertices
+    sor_circum = rowVertices
+
+    ## Face
+    lastRowMap = torch.arange(47,25,-1).to(faces.device)
+    firstTwoElement = torch.arange(24,26,1).to(faces.device)
+    lastRowMap = torch.cat([firstTwoElement,lastRowMap],0)
+    offsetLastRowMap = torch.arange((verticesNum),(verticesNum+rowVertices),1).to(faces.device)
+    faces = faces[44:]
+    for i, (originValue,mapValue) in enumerate(zip(lastRowMap,offsetLastRowMap)):
+        faces[faces==originValue] = mapValue.int()
+    index = faces>(rowVertices-1)
+    faces[index] -= rowVertices
+
+    ## Texture (delete first 44 value in textures upper+lower circle) 
+    textures = textures[44:]
+
+    ## Vertices (replace new vertices instead)
+    sor_curve = rendering.get_random_straight_sor_curve(rad_col).to(vertices.device)
+    sor_vtx = rendering.get_sor_vtx(sor_curve,sor_circum).to(vertices.device)
+    print("sor_curve",sor_curve.shape)
+    print("sor_vtx",sor_vtx.shape)
+    sor_vtx = torch.roll(sor_vtx,rowIndexOffset,2)
+
+    return faces,sor_vtx,textures
 
 ## same camera parameter with RADAR
 image_size = 256
@@ -22,44 +58,7 @@ renderer = rendering.get_renderer(world_ori=[0, 0, 2.5*ori_z], image_size=image_
 
 vertices, faces, textures = nr.load_obj(
     os.path.join(current_dir, 'TestData_Obj_20220225/Test_Straight_3.obj'),normalization=False, load_texture=True, texture_size=16)
-print("vertices",vertices.shape)
-print("faces",faces.shape)
-print("textures",textures.shape)
-print("vertices",vertices)
+faces,vertices,textures = parse3SweepObjData(vertices,faces,textures)
 
-vertices[26:48] = torch.flip(vertices[26:48],[0])
-new_sor_vtx = vertices.clone()
-# new_sor_vtx[24] = vertices[25]
-# new_sor_vtx[25] = vertices[24]
-# print("new_sor_vtx[24]",new_sor_vtx[24])
-# print("new_sor_vtx[25]",new_sor_vtx[25])
-# new_sor_vtx[26:48] = torch.flip(new_sor_vtx[26:48],[0])
-print("new_sor_vtx[26]",new_sor_vtx[26])
-print("new_sor_vtx[27]",new_sor_vtx[27])
-print("new_sor_vtx[46]",new_sor_vtx[46])
-print("new_sor_vtx[47]",new_sor_vtx[47])
-new_sor_vtx = torch.roll(new_sor_vtx,-24,0)
-new_sor_vtx[0:24] = vertices[0:24]
-new_sor_vtx[-24:] = vertices[24:48]
-print("new_sor_vtx[0]",new_sor_vtx[0])
-print("vertices[0]",vertices[0])
-print("new_sor_vtx[-24]",new_sor_vtx[-24])
-print("vertices[24]",vertices[24])
-print("vertices",vertices.shape)
-print("new_sor_vtx",new_sor_vtx.shape)
-
-## rotation from 3-sweep ? 
-test_rxyz = torch.tensor([[0,np.pi/5,0]]).to(vertices.device)
-rotmat = rendering.get_rotation_matrix(test_rxyz).to(vertices.device)
-rotat_vertices = torch.stack([vertices],0)
-print("rotat_vertices",rotat_vertices.shape)
-rotat_vertices = rendering.rotate_pts(rotat_vertices, rotmat)  # BxNx3
-vertices = rotat_vertices.view(-1,3)
-
-# renderer.eye = nr.get_points_from_angles(-10, 0, 0)
-# images, _, _ = renderer.render(vertices[None, :, :], faces[None, :, :], textures[None, :, :, :, :, :])
-images = renderer.render_rgb(vertices[None, :, :], faces[None, :, :], textures[None, :, :, :, :, :])
-print()
-# images = images.permute(0,2,3,1).detach().cpu().numpy()
-# imsave(os.path.join(current_dir, 'TestData_Obj_20220225/test.png'), images[0])
+images = renderer.render_rgb(vertices.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
 utils.save_images(os.path.join(current_dir, 'TestData_Obj_20220225'), images.detach().cpu().numpy(), suffix='TestSampleObj', sep_folder=True)

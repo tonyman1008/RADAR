@@ -213,7 +213,8 @@ def main(in_dir, out_dir):
         txyz = torch.cat([txy, tz], 1)
 
         
-        sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_bend, rxyz, txyz)
+        sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
+        # sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_bend, rxyz, txyz)
         sor_vtx_map_relighting = rendering.get_sor_quad_center_vtx(sor_vtx_relighting)  # Bx(H-1)xTx3
         normal_map_relighting = rendering.get_sor_quad_center_normal(sor_vtx_relighting)  # Bx(H-1)xTx3
 
@@ -234,7 +235,8 @@ def main(in_dir, out_dir):
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
 
         with torch.no_grad():
-            novel_views = render_views(renderer, cam_loc, canon_sor_vtx_bend, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
+            # novel_views = render_views(renderer, cam_loc, canon_sor_vtx_bend, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
+            novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
             relightings = render_relight(renderer, cam_loc, sor_vtx_relighting, sor_vtx_map_relighting, sor_faces, normal_map_relighting, albedo_replicated, spec_alpha, spec_albedo, tx_size)
             [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
             utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
@@ -242,6 +244,6 @@ def main(in_dir, out_dir):
             utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex_AppleOriginBending'
-    out_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex_AppleOriginBending/animations'
+    in_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex'
+    out_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex/animations'
     main(in_dir, out_dir)

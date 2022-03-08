@@ -90,6 +90,17 @@ def get_sor_vtx(sor_curve, T):
     # print("sor_vtx",sor_vtx.shape)
     return sor_vtx
 
+def get_random_straight_sor_curve(H):
+    scale = 0.75
+    curve_x = 0.35
+    curve_y = 1.3
+
+    r_col = (torch.FloatTensor([curve_x])*scale).repeat(1,H) 
+    h_col = torch.linspace(-curve_y,curve_y,H).view(1,H) *scale
+    straight_sor_curve = torch.stack([r_col, h_col], 2)  # BxHx(r,h)
+
+    return straight_sor_curve
+
 def bend_main_axis_rotate_vtx(sor_vtx):
     ## rotation axis test
     #TODO:bending axis
@@ -326,14 +337,14 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
     fy = image_size /2 /(math.tan(fov/2 *math.pi/180))
     cx = image_size /2
     cy = image_size /2
-    print("fx",fx)
-    print("fy",fx)
-    print("cx",cx)
-    print("cy",cy)
+    # print("fx",fx)
+    # print("fy",fx)
+    # print("cx",cx)
+    # print("cy",cy)
     K = [[fx, 0., cx],
          [0., fy, cy],
          [0., 0., 1.]]
-    print("K",K)
+    # print("K",K)
     K = torch.FloatTensor(K).to(device)
     inv_K = torch.inverse(K).unsqueeze(0)
     K = K.unsqueeze(0)

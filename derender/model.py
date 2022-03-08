@@ -398,7 +398,8 @@ class Derenderer():
 
         ## render mask
         ##TODO: pass bend vertices into renderer
-        self.mask_rendered = self.renderer.render_silhouettes(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
+        self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
+        # self.mask_rendered = self.renderer.render_silhouettes(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
         print("mask_render", self.mask_rendered.shape)
 
         ## sample frontal texture map
@@ -446,7 +447,8 @@ class Derenderer():
         self.front_sor_faces = self.sor_faces[:,:,wcrop_sor:self.sor_circum//2-wcrop_sor].repeat(b,1,1,1,1)
         self.front_mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.front_sor_faces.reshape(b,-1,3))
         ##TODO: pass bend vertices into renderer
-        self.front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        self.front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        # self.front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
         im_loss_mask = (self.front_mask_rendered * self.mask_gt).unsqueeze(1)
         im_loss_mask = im_loss_mask.expand_as(self.input_im).detach()
 
@@ -456,7 +458,8 @@ class Derenderer():
         self.mean_albedo_tex_im = rendering.compose_shading(self.mean_albedo, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
         self.mean_albedo_front_tex_im = self.mean_albedo_tex_im[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im]
         ##TODO: pass bend vertices into renderer
-        self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        # self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
 
         ## losses
         self.loss_mask = ((self.mask_rendered - self.mask_gt)**2).view(b,-1).mean(1).mean()
@@ -572,16 +575,27 @@ class Derenderer():
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         tex_im_replicated = rendering.compose_shading(albedo_replicated, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
 
-        ##TODO: pass bend vertices into renderer
-        self.depth_rendered = self.renderer.render_depth(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
-        self.normal_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
-        self.im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
-        self.albedo_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
-        self.mean_albedo_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.mean_albedo_tex_im, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        ##origin save reuslt
+        self.depth_rendered = self.renderer.render_depth(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
+        self.normal_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
+        self.im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        self.albedo_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        self.mean_albedo_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.mean_albedo_tex_im, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
         self.diffuse_map = (self.diffuse *0.7).clamp(0, 1).repeat(1,3,1,1)
-        self.diffuse_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
+        self.diffuse_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
         self.specular_map = (self.specular *self.spec_albedo *1.5).clamp(0, 1).repeat(1,3,1,1)
-        self.specular_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
+        self.specular_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
+        
+        ##TODO: pass bend vertices into renderer
+        # self.depth_rendered = self.renderer.render_depth(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
+        # self.normal_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
+        # self.im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.albedo_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.mean_albedo_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.mean_albedo_tex_im, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.diffuse_map = (self.diffuse *0.7).clamp(0, 1).repeat(1,3,1,1)
+        # self.diffuse_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
+        # self.specular_map = (self.specular *self.spec_albedo *1.5).clamp(0, 1).repeat(1,3,1,1)
+        # self.specular_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
 
         def save_images(im, suffix):
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)
@@ -616,7 +630,8 @@ class Derenderer():
         material_rendered = rendering.render_material(self.renderer, self.spec_alpha, self.spec_albedo_scalar)
         save_images(material_rendered, 'material_rendered')
         ##TODO: pass bend vertices into renderer
-        novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
+        novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
+        # novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
         save_images(novel_view_rendered, 'novel_view_rendered')
         save_images(novel_view_mask_rendered.unsqueeze(1).repeat(1,3,1,1), 'novel_view_mask_rendered')
 
