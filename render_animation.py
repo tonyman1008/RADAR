@@ -1,5 +1,6 @@
 import os
 from glob import glob
+from pickle import TRUE
 import numpy as np
 import cv2
 import torch
@@ -112,7 +113,7 @@ def main(in_dir, out_dir):
     ## vetex grid size = radcol_height * sor_circum
     radcol_height = 37 # radius column & height
     sor_circum = 24 ##TODO: set sor_circum to 24 fit 3sweep object
-    #
+
     tex_im_h = 256
     tex_im_w = 768 ## 256*3 => 3 times width of texture
     env_map_h = 16
@@ -121,6 +122,8 @@ def main(in_dir, out_dir):
     ori_z = 5 # camera z-axis orientation
     tx_size = 8
     # cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
+
+    apply_bending_trans = True
 
     ##TODO: test cam log to
     cam_loc = torch.FloatTensor([0,0,0]).to(device) # camera position
@@ -155,76 +158,38 @@ def main(in_dir, out_dir):
         material = material_all[b0:b1].to(device)
         env_map = env_map_all[b0:b1].to(device)
 
-        ## test
-        env_map = torch.cat([env_map,env_map],1)
-        print("env_map",env_map.shape)
-
-        ##TODO:load obj
-        vertices_from_obj, faces_from_obj = nr.load_obj(
-        os.path.join(in_dir, 'Obj/Test_Straight_3.obj'), load_texture=False, texture_size=16)
-
-        vertices_from_bend_obj, faces_from_bend_obj = nr.load_obj(
-        os.path.join(in_dir, 'Obj/bend.obj'), load_texture=False, texture_size=16)
-        
-        print("vertices from obj",vertices_from_obj.shape)
-        print("faces from obj",faces_from_obj.shape)
-        
-
-        ## rotation from 3-sweep ?
-        # test_rxyz = torch.tensor([[0,np.pi/5,0]]).to(vertices_from_obj.device)
-        # rotmat = rendering.get_rotation_matrix(test_rxyz).to(vertices_from_obj.device)
-        # rotat_vertices = torch.stack([vertices_from_obj],0)
-        # print("rotat_vertices",rotat_vertices.shape)
-        # rotat_vertices = rendering.rotate_pts(rotat_vertices, rotmat)  # BxNx3
-        # vertices_from_obj = rotat_vertices.reshape(-1,3)
-
-        ##TODO: replace vertices from obj
-        canon_sor_vtx = vertices_from_obj.reshape(radcol_height,sor_circum,3)
-        canon_sor_vtx = torch.stack([canon_sor_vtx],0)
-
-        canon_sor_vtx_bend = vertices_from_bend_obj.reshape(radcol_height,sor_circum,3)
-        canon_sor_vtx_bend = torch.stack([canon_sor_vtx_bend],0)
-
-        ##TODO: roll index
-        canon_sor_vtx = torch.roll(canon_sor_vtx,-5,2) ##?
-        canon_sor_vtx_bend = torch.roll(canon_sor_vtx_bend,-5,2) ##?
-
-        ##
-
-        # canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum)  # BxHxTx3
-        print("canon_sor_vtx origin shape",canon_sor_vtx.shape)
-
         #TODO:multi-obj
-        # translation test | concatenate at dimension 1
-        # test_txyz = torch.tensor([[0.5,0,0]]).to(canon_sor_vtx.device)
-        # test_rxyz = torch.tensor([[0,0,np.pi/2]]).to(canon_sor_vtx.device)
-        # canon_sor_vtx_test = rendering.transform_pts(canon_sor_vtx,None,test_txyz)
-        # canon_sor_vtx_test_bend = rendering.bend_main_axis_rotate_vtx(canon_sor_vtx_test)
+        # env_map = torch.cat([env_map,env_map],1)
+
+        ## load origin obj
+        vertices_from_obj, faces_from_obj = nr.load_obj(
+        os.path.join(in_dir, 'Obj/bend.obj'), load_texture=False, texture_size=16)
+        # vertices_from_obj, faces_from_obj, _ = utils.parse3SweepObjData(vertices_from_obj,faces_from_obj,None)
+        print("vertices_from_obj shape",vertices_from_obj.shape)
+        print("faces_from_obj shape",faces_from_obj.shape)
+
+        canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum)  # BxHxTx3
+        canon_sor_vtx_obj = vertices_from_obj.reshape(radcol_height,sor_circum,3)
+        canon_sor_vtx_obj = torch.stack([canon_sor_vtx_obj],0)
 
         # test concatenate at dimension 1
         #TODO:multi-obj
         # canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test_bend],1)
-        print("canon_sor_vtx new shape",canon_sor_vtx.shape)
 
         ## test for relighting
         rxyz = pose[:,:3] / 180 * np.pi # 1x3
         txy = pose[:,3:] # 1x2
         tz = torch.zeros(len(txy), 1).to(txy.device) ## set z-transform to zero
         txyz = torch.cat([txy, tz], 1)
-
         
-        sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
-        # sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_bend, rxyz, txyz)
+        if(apply_bending_trans == True):
+            sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_obj, rxyz, txyz)
+        else:
+            sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
         sor_vtx_map_relighting = rendering.get_sor_quad_center_vtx(sor_vtx_relighting)  # Bx(H-1)xTx3
         normal_map_relighting = rendering.get_sor_quad_center_normal(sor_vtx_relighting)  # Bx(H-1)xTx3
 
         spec_alpha, spec_albedo = material.unbind(1)
-
-        ## test
-        # spec_alpha = torch.cat([spec_alpha,spec_alpha],0)
-        # spec_albedo = torch.cat([spec_albedo,spec_albedo],0)
-        # print("spec_alpha",spec_alpha.shape)
-        # print("spec_albedo",spec_albedo.shape)
 
         ## replicate albedo
         wcrop_ratio = 1/6
@@ -235,8 +200,10 @@ def main(in_dir, out_dir):
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
 
         with torch.no_grad():
-            # novel_views = render_views(renderer, cam_loc, canon_sor_vtx_bend, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
-            novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
+            if(apply_bending_trans == True):
+                novel_views = render_views(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
+            else:
+                novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
             relightings = render_relight(renderer, cam_loc, sor_vtx_relighting, sor_vtx_map_relighting, sor_faces, normal_map_relighting, albedo_replicated, spec_alpha, spec_albedo, tx_size)
             [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
             utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
@@ -244,6 +211,6 @@ def main(in_dir, out_dir):
             utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex'
-    out_dir = 'results/TestResults_20220307_Obj_SampleView_37x24_TestStartIndex/animations'
+    in_dir = 'results/TestResults_20220308_Obj_SampleView_37x24_ApplyOriginTransform'
+    out_dir = 'results/TestResults_20220308_Obj_SampleView_37x24_ApplyOriginTransform/animations'
     main(in_dir, out_dir)

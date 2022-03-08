@@ -74,7 +74,6 @@ class Derenderer():
         self.other_param_names = ['sor_faces', 'criterionGAN']
 
         print("sor_faces",self.sor_faces.shape)
-        print("sor_faces",self.sor_faces)
 
         ## range rescalers
         self.rad_col_rescaler = lambda x : x *0.9 +0.05
@@ -313,134 +312,61 @@ class Derenderer():
         self.mask_gt_dt = mask_gt_dt.to(self.device)
         b, c, h, w = self.input_im.shape
 
-        ## TODO:load custom SoR curve
-        # self.sor_curve_custom = utils.load_txts(glob.glob(os.path.join(self.in_dir, '*_sor_curve.txt')))
-        # self.pitch_custom = utils.load_txts(glob.glob(os.path.join(self.in_dir, '*_pitch.txt')))/180*math.pi
-        # print("sor_curve_custom",self.sor_curve_custom.shape)
-        # print("pitch_custom",self.pitch_custom.shape)
-        ## origin pose generator from generate_synvase.py
-        # self.rxyz_custom = torch.stack([self.pitch_custom, torch.zeros_like(self.pitch_custom), torch.zeros_like(self.pitch_custom)], 1).to(self.device)
-        # print("rxyz_custom",self.rxyz_custom)
-        # posed_sor_vtx = transform_sor(sor_vtx.view(b,-1,3), rxyz, txy=None).view(b,H,T,3)
+        ##TODO: Camera pose for render animation
+        self.rxyz = torch.zeros(1,3)
+        self.txy = torch.zeros(1,2)
 
-        ## TODO:replace this part to be known 3d object vertices
-        
-        ## predict sor and pose 
-        print("input_im",self.input_im.shape)
-        self.rad_col, pose_pred = self.netR(self.input_im *2-1)  # BxH, 0~1
-        self.rad_col = self.rad_col_rescaler(self.rad_col)
-        self.hscale, self.rx, self.rz, self.tx, self.ty = pose_pred.unbind(1)  # 0~1
-        self.hscale = self.hscale_rescaler(self.hscale)
-        # print("rad_col",self.rad_col.shape)
-
-        self.sor_curve = rendering.get_sor_curve(self.rad_col, self.hscale) *self.max_range
-
-        ##TODO: use custom data to replace sor curve
-        # self.sor_curve = self.sor_curve_custom.clone().to(self.device)
-        # print("sor_curve",self.sor_curve.shape)
-
-        self.rx = self.rx_rescaler(self.rx)
-        self.rz = self.rz_rescaler(self.rz)
-        self.rxyz = torch.stack([self.rx, torch.zeros_like(self.rx), self.rz], 1)
-        self.txy = torch.stack([self.tx, self.ty], 1)
-        self.txy = self.txy_rescaler(self.txy)
-
-        ##TODO: use custom data to replace sor curve
-        # self.rxyz = self.rxyz_custom.clone()
-        # self.txy = torch.zeros(1,2).to(self.device)
-
-        ##TODO:load obj
+        ## load origin obj
         self.vertices_from_obj, self.faces_from_obj = nr.load_obj(
-        os.path.join(self.in_dir, 'Obj/Test_Straight_3.obj'), load_texture=False, texture_size=16)
-        self.vertices_from_obj = utils.parse3SweepVertices(self.vertices_from_obj)
-
-        ## bending axis obj
-        self.vertices_from_bend_obj, self.faces_from_bend_obj = nr.load_obj(
         os.path.join(self.in_dir, 'Obj/bend.obj'), load_texture=False, texture_size=16)
-        self.vertices_from_bend_obj = utils.parse3SweepVertices(self.vertices_from_bend_obj)
+        self.vertices_from_obj, self.faces_from_obj, _ = utils.parse3SweepObjData(self.vertices_from_obj,self.faces_from_obj,None)
 
-        print("vertices from obj",self.vertices_from_obj.shape)
-        # print("vertices from obj",self.vertices_from_obj)
-        print("faces from obj",self.faces_from_obj.shape)
-        # print("faces from obj",self.faces_from_obj)
+        ## get custom sor_curve straight axis
+        self.sor_curve = rendering.get_straight_sor_curve(self.radcol_height,self.device)
 
-        ##TODO: rotation from 3-sweep ?
-        test_rxyz = torch.tensor([[0,np.pi/5,0]]).to(self.vertices_from_obj.device)
-        rotmat = rendering.get_rotation_matrix(test_rxyz).to(self.vertices_from_obj.device)
-
-        #rotate vertices because the sample view rotation 
-        rotat_vertices = torch.stack([self.vertices_from_obj],0)
-        rotat_vertices = rendering.rotate_pts(rotat_vertices, rotmat)  # BxNx3
-        self.vertices_from_obj = rotat_vertices.reshape(-1,3)
-        rotat_bend_vertices = torch.stack([self.vertices_from_bend_obj],0)
-        rotat_bend_vertices = rendering.rotate_pts(rotat_bend_vertices, rotmat)  # BxNx3
-        self.vertices_from_bend_obj = rotat_bend_vertices.reshape(-1,3)
-
-        ##TODO: replace vertices from obj
-        self.canon_sor_vtx = self.vertices_from_obj.reshape(self.radcol_height,self.sor_circum,3)
-        self.canon_sor_vtx = torch.stack([self.canon_sor_vtx],0)
-        self.canon_sor_vtx_bend = self.vertices_from_bend_obj.reshape(self.radcol_height,self.sor_circum,3)
-        self.canon_sor_vtx_bend = torch.stack([self.canon_sor_vtx_bend],0)
-
-        ##TODO: sample front texture need index,but from 3-sweep index not start at the view far left
-        self.canon_sor_vtx = torch.roll(self.canon_sor_vtx,-5,2) ##?
-        self.canon_sor_vtx_bend = torch.roll(self.canon_sor_vtx_bend,-5,2) ##?
+        ## replace vertices from obj
+        self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum) # BxHxTx3
+        self.canon_sor_vtx_obj = self.vertices_from_obj.reshape(self.radcol_height,self.sor_circum,3)
+        self.canon_sor_vtx_obj = torch.stack([self.canon_sor_vtx_obj],0)
 
         ## get sor vertices map
-        # self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum)  # BxHxTx3
         self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, None, None)
-        # self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, self.rxyz, self.txy)
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
         print("canon_sor_vtx",self.canon_sor_vtx.shape)
         print("sor_vtx",self.sor_vtx.shape)
         print("normal_map",self.normal_map.shape)
-        print("b=batch size",b)
 
         ## render mask
-        ##TODO: pass bend vertices into renderer
         self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
-        # self.mask_rendered = self.renderer.render_silhouettes(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
-        print("mask_render", self.mask_rendered.shape)
 
         ## sample frontal texture map
         self.sor_vtx_map = rendering.get_sor_quad_center_vtx(self.sor_vtx)  # Bx(H-1)xTx3
         wcrop_tex_im = int(self.wcrop_ratio * self.tex_im_w//2)
         self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z*2.5], self.input_im)
-        print("front_tex_im_gt", self.front_tex_im_gt.shape)
-        print("wcrop_tex_im", wcrop_tex_im)
-        print("sor_vtx_map", self.sor_vtx_map.shape)
 
         ## predict albedo
         self.front_tex_im_gt_cropped = self.front_tex_im_gt[:,:,:,wcrop_tex_im:-wcrop_tex_im]  # 128x128
-        print("front_tex_im_gt_cropped", self.front_tex_im_gt_cropped.shape)
         self.albedo = self.netT(self.front_tex_im_gt_cropped *2-1) /2+0.5
-        print("albedo from netT", self.albedo.shape)
         ## padding albedo 64 tensor to left & right   origin 256 + (64+64) = 384
         self.albedo = torch.nn.functional.pad(self.albedo, (wcrop_tex_im,wcrop_tex_im,0,0), mode='replicate')
-        print("albedo after nn pad", self.albedo.shape)
 
         ## replicate back side
         self.albedo = torch.cat([self.albedo, self.albedo.flip(3)], 3)
-        print("albedo", self.albedo.shape)
 
         ## shading
         wcrop_sor = int(self.wcrop_ratio*self.sor_circum//2)
-        print("wcrop_sor", wcrop_sor)
         normal_map_cropped = self.normal_map[:,:,wcrop_sor:self.sor_circum//2-wcrop_sor,:]
         normal_map_cropped = torch.nn.functional.interpolate(normal_map_cropped.permute(0,3,1,2), (self.tex_im_h, self.tex_im_w//2-wcrop_tex_im*2), mode='bilinear', align_corners=False)
         normal_map_cropped = normal_map_cropped / (normal_map_cropped**2).sum(1,keepdim=True)**0.5
         light_input = torch.cat([self.front_tex_im_gt_cropped *2-1, normal_map_cropped], 1)
         self.env_map, self.light_params = self.netE(light_input)
         self.env_map = self.env_map.squeeze(1)  # 0~1
-        print("env_map", self.env_map.shape)
         self.spec_alpha = self.spec_alpha_rescaler(self.light_params[:,0])
         self.spec_albedo_scalar = self.spec_albedo_rescaler(self.light_params[:,1])
         self.spec_albedo = self.spec_albedo_scalar.view(b,1,1,1)
         cam_loc = torch.FloatTensor([0,0,-self.ori_z]).to(self.device)
         self.diffuse, self.specular = rendering.envmap_phong_shading(self.sor_vtx_map, self.normal_map, cam_loc, self.env_map, self.spec_alpha)
         self.tex_im = rendering.compose_shading(self.albedo, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
-        print("diffuse", self.diffuse.shape)
-        print("tex_im", self.tex_im.shape)
 
         ## render
         self.front_tex_im = self.tex_im[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im]
@@ -448,7 +374,7 @@ class Derenderer():
         self.front_mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.front_sor_faces.reshape(b,-1,3))
         ##TODO: pass bend vertices into renderer
         self.front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
-        # self.front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        # self.front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.front_sor_faces, self.front_tex_im, tx_size=self.tx_size).clamp(0, 1)
         im_loss_mask = (self.front_mask_rendered * self.mask_gt).unsqueeze(1)
         im_loss_mask = im_loss_mask.expand_as(self.input_im).detach()
 
@@ -459,7 +385,7 @@ class Derenderer():
         self.mean_albedo_front_tex_im = self.mean_albedo_tex_im[:,:,:,wcrop_tex_im:self.tex_im_w//2-wcrop_tex_im]
         ##TODO: pass bend vertices into renderer
         self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
-        # self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
+        # self.mean_albedo_front_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.front_sor_faces, self.mean_albedo_front_tex_im, tx_size=self.tx_size).clamp(0, 1)
 
         ## losses
         self.loss_mask = ((self.mask_rendered - self.mask_gt)**2).view(b,-1).mean(1).mean()
@@ -470,14 +396,6 @@ class Derenderer():
         ## diffuse consistency regularizer
         self.diffuse_mean = self.diffuse[:,:,:,wcrop_sor:self.sor_circum//2-wcrop_sor].reshape(b,-1).mean(1)
         self.loss_diffuse_reg = (((self.diffuse_mean - self.diffuse_reg_mean).abs() -self.diffuse_reg_margin).clamp(min=0.) **2).mean()
-
-        ## total loss
-        # print("loss mask",self.loss_mask)
-        # print("loss mask dt",self.loss_mask_dt)
-        # print("loss iamge",self.loss_im)
-        # print("loss mean albedo",self.loss_mean_albedo_im)
-        # print("loss diffuse reg",self.loss_diffuse_reg)
-
         self.loss_total = self.lam_mask*self.loss_mask + self.lam_mask_dt*self.loss_mask_dt + self.lam_im*self.loss_im + self.lam_mean_albedo_im*self.loss_mean_albedo_im + self.lam_diffuse_reg*self.loss_diffuse_reg
         metrics = {'loss': self.loss_total}
 
@@ -587,15 +505,15 @@ class Derenderer():
         self.specular_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
         
         ##TODO: pass bend vertices into renderer
-        # self.depth_rendered = self.renderer.render_depth(self.canon_sor_vtx_bend.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
-        # self.normal_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
-        # self.im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
-        # self.albedo_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
-        # self.mean_albedo_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.mean_albedo_tex_im, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.depth_rendered = self.renderer.render_depth(self.canon_sor_vtx_obj.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
+        # self.normal_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
+        # self.im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.albedo_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        # self.mean_albedo_im_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), self.mean_albedo_tex_im, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
         # self.diffuse_map = (self.diffuse *0.7).clamp(0, 1).repeat(1,3,1,1)
-        # self.diffuse_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
+        # self.diffuse_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
         # self.specular_map = (self.specular *self.spec_albedo *1.5).clamp(0, 1).repeat(1,3,1,1)
-        # self.specular_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
+        # self.specular_rendered = rendering.render_sor(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
 
         def save_images(im, suffix):
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)
@@ -631,14 +549,13 @@ class Derenderer():
         save_images(material_rendered, 'material_rendered')
         ##TODO: pass bend vertices into renderer
         novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
-        # novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_bend, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
+        # novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
         save_images(novel_view_rendered, 'novel_view_rendered')
         save_images(novel_view_mask_rendered.unsqueeze(1).repeat(1,3,1,1), 'novel_view_mask_rendered')
 
         ##TODO: save obj
         os.makedirs(os.path.join(save_dir, 'Obj'),exist_ok=True)
-        nr.save_obj(os.path.join(save_dir, 'Obj/Test_Straight_3.obj'),self.vertices_from_obj,self.faces_from_obj)
-        nr.save_obj(os.path.join(save_dir, 'Obj/bend.obj'),self.vertices_from_bend_obj,self.faces_from_bend_obj)
+        nr.save_obj(os.path.join(save_dir, 'Obj/bend.obj'),self.vertices_from_obj,self.faces_from_obj)
 
     def save_scores(self, path):
         pass

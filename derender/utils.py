@@ -220,22 +220,37 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
     patches = torch.nn.functional.grid_sample(im.repeat(num_patch,1,1,1), xy_grid.to(im.device), mode='bilinear', align_corners=False).view(num_patch,b,c,patch_size,patch_size).transpose(1,0)
     return patches  # BxNxCxHxW
 
-def parse3SweepVertices(origin_sor_vtx):
-    print("====parse3SweepVertices====")
-    origin_sor_vtx[26:48] = torch.flip(origin_sor_vtx[26:48],[0])
-    new_sor_vtx = origin_sor_vtx.clone()
-    # print("new_sor_vtx[24]",new_sor_vtx[24])
-    # print("new_sor_vtx[47]",new_sor_vtx[47])
-    new_sor_vtx = torch.roll(new_sor_vtx,-24,0)
-    new_sor_vtx[0:24] = origin_sor_vtx[0:24]
-    new_sor_vtx[-24:] = origin_sor_vtx[24:48]
-    # print("new_sor_vtx[0]",new_sor_vtx[0])
-    # print("origin_sor_vtx[0]",origin_sor_vtx[0])
-    # print("new_sor_vtx[-24]",new_sor_vtx[-24])
-    # print("origin_sor_vtx[24]",origin_sor_vtx[24])
-    # print("origin_sor_vtx",origin_sor_vtx.shape)
-    # print("new_sor_vtx",new_sor_vtx.shape)
-    return new_sor_vtx
+def parse3SweepObjData(vertices,faces=None,textures=None):
+
+    rowVertices = 24
+    TopAndBottomFaceNumber = 44
+    verticesNum = vertices.shape[0]
+
+    ## Vertices
+    if vertices is not None:
+        vertices[26:48] = torch.flip(vertices[26:48],[0])
+        new_sor_vtx = vertices.clone()
+        new_sor_vtx = torch.roll(new_sor_vtx,-24,0)
+        new_sor_vtx[0:24] = vertices[0:24]
+        new_sor_vtx[-24:] = vertices[24:48]
+
+     ## Face
+    if faces is not None:
+        lastRowMap = torch.arange(47,25,-1).to(faces.device)
+        firstTwoElement = torch.arange(24,26,1).to(faces.device)
+        lastRowMap = torch.cat([firstTwoElement,lastRowMap],0)
+        offsetLastRowMap = torch.arange((verticesNum),(verticesNum+rowVertices),1).to(faces.device)
+        faces = faces[TopAndBottomFaceNumber:]
+        for i, (originValue,mapValue) in enumerate(zip(lastRowMap,offsetLastRowMap)):
+            faces[faces==originValue] = mapValue.int()
+        index = faces>(rowVertices-1)
+        faces[index] -= rowVertices
+
+    ## Texture (delete first 44 value in textures upper+lower circle)
+    if textures is not None:
+        textures = textures[TopAndBottomFaceNumber:]    
+
+    return new_sor_vtx,faces,textures
 
 def load_imgs(flist):
     return torch.stack([torch.FloatTensor(cv2.imread(f) /255.).flip(2) for f in flist], 0).permute(0,3,1,2)

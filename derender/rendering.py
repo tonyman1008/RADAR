@@ -90,50 +90,16 @@ def get_sor_vtx(sor_curve, T):
     # print("sor_vtx",sor_vtx.shape)
     return sor_vtx
 
-def get_random_straight_sor_curve(H):
+def get_straight_sor_curve(H,device):
     scale = 0.75
     curve_x = 0.35
     curve_y = 1.3
 
-    r_col = (torch.FloatTensor([curve_x])*scale).repeat(1,H) 
-    h_col = torch.linspace(-curve_y,curve_y,H).view(1,H) *scale
+    r_col = (torch.FloatTensor([curve_x])*scale).repeat(1,H).to(device)
+    h_col = torch.linspace(-curve_y,curve_y,H).view(1,H).to(device)*scale
     straight_sor_curve = torch.stack([r_col, h_col], 2)  # BxHx(r,h)
 
     return straight_sor_curve
-
-def bend_main_axis_rotate_vtx(sor_vtx):
-    ## rotation axis test
-    #TODO:bending axis
-    s = sor_vtx.shape[1] # sample number
-    print("sample number",s)
-
-    ## rotation
-    rzs = torch.linspace(np.pi/2, 0, s) # rotation x axis (roll)
-    # rzs_2 = torch.full([16], 0) # rotation x axis (roll)
-    # rzs = torch.cat((rzs,rzs_2),0)
-
-    # translation
-    txs = torch.linspace(0.05,0,s)
-    print("txs",txs)
-
-    for i,(rz,tx) in enumerate(zip(rzs,txs)):
-        print("rz",rz)
-        print("i",i)
-        ## rotate y-axis first then rotate x-axis
-        rotate_sor_vtx_one_row = sor_vtx[:,i,:,:].to(sor_vtx.device)
-        rxyz = torch.stack([rz*0, rz*0, rz], 0).unsqueeze(0).to(sor_vtx.device)
-        print("rotate_sor_vtx_one_row",rotate_sor_vtx_one_row.shape)
-        print("rxyz",rxyz.shape)
-
-        txyz = torch.FloatTensor([[tx,tx*0,tx*0]]).to(sor_vtx.device)
-        print("txyz test",txyz.shape)
-
-        # rotate_sor_vtx_one_row = transform_pts(rotate_sor_vtx_one_row, None, txyz)
-        rotate_sor_vtx_one_row = transform_pts(rotate_sor_vtx_one_row, rxyz, None)
-        sor_vtx[:,i,:,:] = rotate_sor_vtx_one_row
-        print("sor_vtx",sor_vtx.shape)
-
-    return sor_vtx
 
 def get_sor_full_face_idx(h, w):
     # print("====get_sor_full_face_idx====")
