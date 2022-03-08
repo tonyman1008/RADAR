@@ -18,8 +18,9 @@ def parse3SweepObjData(vertices,faces,textures):
     rowIndexOffset = 5
     rowVertices = 24
     verticesNum = vertices.shape[0]
-    rad_col = verticesNum / rowVertices
+    rad_col = verticesNum // rowVertices
     sor_circum = rowVertices
+    print("rad_col",rad_col)
 
     ## Face
     lastRowMap = torch.arange(47,25,-1).to(faces.device)
@@ -57,8 +58,8 @@ renderer_min_depth = 0.1
 renderer = rendering.get_renderer(world_ori=[0, 0, 2.5*ori_z], image_size=image_size, fov=fov, fill_back=True)
 
 vertices, faces, textures = nr.load_obj(
-    os.path.join(current_dir, 'TestData_Obj_20220225/Test_Straight_3.obj'),normalization=False, load_texture=True, texture_size=16)
+    os.path.join(current_dir, 'data/Test_Bending_20220308_3Sweep/bend.obj'),normalization=False, load_texture=True, texture_size=16)
 faces,vertices,textures = parse3SweepObjData(vertices,faces,textures)
 
 images = renderer.render_rgb(vertices.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
-utils.save_images(os.path.join(current_dir, 'TestData_Obj_20220225'), images.detach().cpu().numpy(), suffix='TestSampleObj', sep_folder=True)
+utils.save_images(os.path.join(current_dir, 'data/Test_Bending_20220308_3Sweep'), images.detach().cpu().numpy(), suffix='TestSampleObj', sep_folder=True)
