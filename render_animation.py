@@ -1,3 +1,4 @@
+from operator import truediv
 import os
 from glob import glob
 from pickle import TRUE
@@ -32,7 +33,8 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         ## rotate y-axis first then rotate x-axis
         rxyz = torch.stack([rx*0, ry, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
         sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, None)
-        rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+        # rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+        rxyz = torch.stack([rx*0, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
 
         ## translation test
         test_txyz = [[0,0,0]]
@@ -121,19 +123,17 @@ def main(in_dir, out_dir):
     fov = 10  # in degrees
     ori_z = 5 # camera z-axis orientation
     tx_size = 8
-    # cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
-
-    apply_bending_trans = True
-
-    ##TODO: test cam log to
     cam_loc = torch.FloatTensor([0,0,0]).to(device) # camera position
+
+    apply_bending_transform = True
 
     #TODO:multi-obj
     ## test radcol_height x 2
     # sor_faces = rendering.get_sor_full_face_idx(radcol_height*2, sor_circum).to(device)  # 2x(H-1)xWx3
     sor_faces = rendering.get_sor_full_face_idx(radcol_height, sor_circum).to(device)  # 2x(H-1)xWx3
+    print("sor_faces",sor_faces.shape)
+    batch_size = 1
     renderer = rendering.get_renderer(world_ori=[0,0,ori_z*2.5], image_size=image_size, fov=fov, fill_back=True, device='cuda:0')
-    batch_size = 10
 
     sor_curve_all = load_txts(sorted(glob(os.path.join(in_dir, 'sor_curve/*_sor_curve.txt'), recursive=True)))
     albedo_all = load_imgs(sorted(glob(os.path.join(in_dir, 'albedo_map/*_albedo_map.png'), recursive=True)))
@@ -161,16 +161,18 @@ def main(in_dir, out_dir):
         #TODO:multi-obj
         # env_map = torch.cat([env_map,env_map],1)
 
-        ## load origin obj
+        ## load origin obj( the obj is already parsed )
         vertices_from_obj, faces_from_obj = nr.load_obj(
-        os.path.join(in_dir, 'Obj/bend.obj'), load_texture=False, texture_size=16)
-        # vertices_from_obj, faces_from_obj, _ = utils.parse3SweepObjData(vertices_from_obj,faces_from_obj,None)
+        os.path.join(in_dir, 'Obj/bend.obj'),normalization=True, load_texture=False, texture_size=8)
+        canon_sor_vtx_obj = vertices_from_obj.reshape(1,radcol_height,sor_circum,3)
+
         print("vertices_from_obj shape",vertices_from_obj.shape)
         print("faces_from_obj shape",faces_from_obj.shape)
+        print("canon_sor_vtx_obj shape",canon_sor_vtx_obj.shape)
 
+        ## get vertices from sor_curve
         canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum)  # BxHxTx3
-        canon_sor_vtx_obj = vertices_from_obj.reshape(radcol_height,sor_circum,3)
-        canon_sor_vtx_obj = torch.stack([canon_sor_vtx_obj],0)
+        print("canon_sor_vtx shape",canon_sor_vtx.shape)
 
         # test concatenate at dimension 1
         #TODO:multi-obj
@@ -182,7 +184,7 @@ def main(in_dir, out_dir):
         tz = torch.zeros(len(txy), 1).to(txy.device) ## set z-transform to zero
         txyz = torch.cat([txy, tz], 1)
         
-        if(apply_bending_trans == True):
+        if apply_bending_transform == True:
             sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_obj, rxyz, txyz)
         else:
             sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
@@ -198,9 +200,9 @@ def main(in_dir, out_dir):
         p = 8
         front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3)
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
-
+        
         with torch.no_grad():
-            if(apply_bending_trans == True):
+            if apply_bending_transform == True :
                 novel_views = render_views(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
             else:
                 novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
@@ -211,6 +213,6 @@ def main(in_dir, out_dir):
             utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220308_Obj_SampleView_37x24_ApplyOriginTransform'
-    out_dir = 'results/TestResults_20220308_Obj_SampleView_37x24_ApplyOriginTransform/animations'
+    in_dir = 'results/TestResults_20220310_Obj_SampleView_37x24_ApplyOriginTransform'
+    out_dir = 'results/TestResults_20220310_Obj_SampleView_37x24_ApplyOriginTransform/animations'
     main(in_dir, out_dir)

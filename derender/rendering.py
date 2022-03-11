@@ -351,6 +351,7 @@ def render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=4, dim_inside=False
         ##TODO:multi-obj 
         # tx_cube2 = torch.nn.functional.grid_sample(tex_im_2, tex_uv_grid_2.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
     tx_cube = tx_cube.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
+    print("tx_cube",tx_cube.shape)
     ##TODO:multi-obj 
     # tx_cube2 = tx_cube2.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
 
@@ -405,7 +406,7 @@ def render_material(renderer, spec_alpha, spec_albedo_scalar):
     env_map[:, 3, 5] = 4
     albedo = torch.ones(b, 3, tex_im_h, tex_im_w).to(device) *1
     ori_z = 5
-    cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device)
+    cam_loc = torch.FloatTensor([0,0,0]).to(device)
     fov = 10
     max_range = math.tan(fov/2/180*math.pi) *ori_z
 
@@ -428,7 +429,7 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     device = canon_sor_vtx.device
     tx_size = 8
     ori_z = 5
-    cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device)
+    cam_loc = torch.FloatTensor([0,0,0]).to(device)
 
     rxyz = torch.FloatTensor([0, 30, 0]).repeat(b,1).to(device) /180*math.pi
     sor_vtx = transform_pts(canon_sor_vtx, rxyz, None)
