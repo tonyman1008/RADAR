@@ -222,11 +222,12 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
 
 def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=None):
 
-    initialIndexOffset = -8
+    ##TODO: offset how to make sure
+    initialIndexOffset = -3
 
     TopAndBottomFaceNumber = (sor_circum-2)*2
     verticesNum = vertices.shape[0]
-
+    print("TopAndBottomFaceNumber",TopAndBottomFaceNumber)
     ## Vertices
     if vertices is not None:
         vertices[26:48] = torch.flip(vertices[26:48],[0])
@@ -249,8 +250,14 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
         faces = faces[TopAndBottomFaceNumber:]
         for i, (originValue,mapValue) in enumerate(zip(lastRowMap,offsetLastRowMap)):
             faces[faces==originValue] = mapValue.int()
-        index = faces>(sor_circum-1)
-        faces[index] -= sor_circum
+        indexWithoutFirstRow = faces>(sor_circum-1)
+        faces[indexWithoutFirstRow] -= sor_circum
+
+        ## parse the initial position
+        # newFaces = torch.where((faces+initialIndexOffset)>=(faces//sor_circum)*sor_circum,faces+initialIndexOffset,faces+initialIndexOffset+sor_circum)
+
+        print("faces",faces.shape)
+        print("faces",faces.shape)
 
     ## Texture (delete first 44 value in textures upper+lower circle)
     if textures is not None:

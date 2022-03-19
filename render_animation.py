@@ -19,7 +19,7 @@ def load_txts(flist):
     return torch.stack([torch.FloatTensor(np.loadtxt(f, delimiter=',')) for f in flist], 0)
 
 
-def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, spec_alpha, spec_albedo, tx_size):
+def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo,albedo2, env_map, spec_alpha, spec_albedo, tx_size):
     b = canon_sor_vtx.size(0)
     print("====render_views====",)
     s = 80 # sample number
@@ -45,11 +45,11 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
         # print("sor_vtx",sor_vtx.shape)
 
         ##TODO:multi-obj
-        # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
-        # normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:32,:,:])  # Bx(H-1)xTx3
+        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,:99,:,:])  # Bx(H-1)xTx3
+        normal_map = rendering.get_sor_quad_center_normal(sor_vtx[:,:99,:,:])  # Bx(H-1)xTx3
 
-        sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
-        normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
+        # sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
+        # normal_map = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
         diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
         tex_im = rendering.compose_shading(albedo, diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
         # print("sor_vtx_map",sor_vtx_map.shape)
@@ -59,16 +59,14 @@ def render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo, env_map, s
 
         ##TODO:multi-obj
         ## test second object
-        # sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
-        # normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,32:,:,:])  # Bx(H-1)xTx3
-        # sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx)  # Bx(H-1)xTx3
-        # normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx)  # Bx(H-1)xTx3
-        # diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
-        # tex_im_2 = rendering.compose_shading(albedo, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
-        # print("sor_vtx_map_2",sor_vtx_map_2.shape)
+        sor_vtx_map_2 = rendering.get_sor_quad_center_vtx(sor_vtx[:,99:,:,:])  # Bx(H-1)xTx3
+        normal_map_2 = rendering.get_sor_quad_center_normal(sor_vtx[:,99:,:,:])  # Bx(H-1)xTx3
+        diffuse_2, specular_2 = rendering.envmap_phong_shading(sor_vtx_map_2, normal_map_2, cam_loc, env_map, spec_alpha)
+        tex_im_2 = rendering.compose_shading(albedo2, diffuse_2, spec_albedo.view(b,1,1,1), specular_2).clamp(0,1)
+        # utils.save_images(out_dir, tex_im.cpu().numpy(), suffix='novel_views_texture1', sep_folder=True)
         # utils.save_images(out_dir, tex_im_2.cpu().numpy(), suffix='novel_views_texture2', sep_folder=True)
 
-        im_rendered = rendering.render_sor(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1), tex_im, tx_size=tx_size, dim_inside=False).clamp(0, 1)
+        im_rendered = rendering.render_sor(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1), tex_im,tex_im_2, tx_size=tx_size, dim_inside=False).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
@@ -109,11 +107,12 @@ def render_relight(renderer, cam_loc, sor_vtx, sor_vtx_map, sor_faces, normal_ma
     return ims
 
 
-def main(in_dir, out_dir):
+def main(in_dir,in_dir2, out_dir):
     device = 'cuda:0'
     image_size = 256
     ## vetex grid size = radcol_height * sor_circum
-    radcol_height = 37 # radius column & height
+    radcol_height = 99 # radius column & height
+    radcol_height2 = 37 # radius column & height
     sor_circum = 24 ##TODO: set sor_circum to 24 fit 3sweep object
 
     tex_im_h = 256
@@ -130,7 +129,8 @@ def main(in_dir, out_dir):
     #TODO:multi-obj
     ## test radcol_height x 2
     # sor_faces = rendering.get_sor_full_face_idx(radcol_height*2, sor_circum).to(device)  # 2x(H-1)xWx3
-    sor_faces = rendering.get_sor_full_face_idx(radcol_height, sor_circum).to(device)  # 2x(H-1)xWx3
+    sor_faces = rendering.get_sor_full_face_idx_hardCode(radcol_height+radcol_height2, sor_circum).to(device)  # 2x(H-1)xWx3
+    # sor_faces2 = rendering.get_sor_full_face_idx(radcol_height2, sor_circum).to(device)  # 2x(H-1)xWx3
     print("sor_faces",sor_faces.shape)
     batch_size = 1
     renderer = rendering.get_renderer(world_ori=[0,0,ori_z*2.5], image_size=image_size, fov=fov, fill_back=True, device='cuda:0')
@@ -141,6 +141,13 @@ def main(in_dir, out_dir):
     pose_all = load_txts(sorted(glob(os.path.join(in_dir, 'pose/*_pose.txt'), recursive=True)))
     material_all = load_txts(sorted(glob(os.path.join(in_dir, 'material/*_material.txt'), recursive=True)))
     env_map_all = load_imgs(sorted(glob(os.path.join(in_dir, 'env_map/*_env_map.png'), recursive=True)))[:,0,:,:]
+
+    sor_curve_all2 = load_txts(sorted(glob(os.path.join(in_dir2, 'sor_curve/*_sor_curve.txt'), recursive=True)))
+    albedo_all2 = load_imgs(sorted(glob(os.path.join(in_dir2, 'albedo_map/*_albedo_map.png'), recursive=True)))
+    mask_gt_all2 = load_imgs(sorted(glob(os.path.join(in_dir2, 'mask_gt/*_mask_gt.png'), recursive=True)))
+    pose_all2 = load_txts(sorted(glob(os.path.join(in_dir2, 'pose/*_pose.txt'), recursive=True)))
+    material_all2 = load_txts(sorted(glob(os.path.join(in_dir2, 'material/*_material.txt'), recursive=True)))
+    env_map_all2 = load_imgs(sorted(glob(os.path.join(in_dir2, 'env_map/*_env_map.png'), recursive=True)))[:,0,:,:]
 
     total_num = sor_curve_all.size(0)
     for b0 in range(0, total_num, batch_size):
@@ -158,25 +165,68 @@ def main(in_dir, out_dir):
         material = material_all[b0:b1].to(device)
         env_map = env_map_all[b0:b1].to(device)
 
+        sor_curve2 = sor_curve_all2[b0:b1].to(device)
+        
+        albedo2 = albedo_all2[b0:b1].to(device)
+        mask_gt2 = mask_gt_all2[b0:b1].to(device)
+        pose2 = pose_all2[b0:b1].to(device)
+        material2 = material_all2[b0:b1].to(device)
+        env_map2 = env_map_all2[b0:b1].to(device)
+
         #TODO:multi-obj
-        # env_map = torch.cat([env_map,env_map],1)
+        # env_map = torch.cat([env_map,env_map2],1)
 
         ## load origin obj( the obj is already parsed )
         vertices_from_obj, faces_from_obj = nr.load_obj(
-        os.path.join(in_dir, 'Obj/bend.obj'),normalization=True, load_texture=False, texture_size=8)
-        canon_sor_vtx_obj = vertices_from_obj.reshape(1,radcol_height,sor_circum,3)
+        os.path.join(in_dir, 'UnNormalizeObj/vase.obj'),normalization=False, load_texture=False, texture_size=8)
+        vertices_from_obj2, faces_from_obj2 = nr.load_obj(
+        os.path.join(in_dir2, 'UnNormalizeObj/bend.obj'),normalization=False, load_texture=False, texture_size=8)
 
-        print("vertices_from_obj shape",vertices_from_obj.shape)
-        print("faces_from_obj shape",faces_from_obj.shape)
+        vertices_from_obj,_,_ = utils.parse3SweepObjData(radcol_height,sor_circum,vertices_from_obj,None,None)
+        vertices_from_obj2,_,_ = utils.parse3SweepObjData(radcol_height2,sor_circum,vertices_from_obj2,None,None)
+
+        ## normalize from NR loadObj
+        vertices_from_obj_normalize = torch.cat([vertices_from_obj,vertices_from_obj2],0)
+        print("vertices_from_obj_normalize",vertices_from_obj_normalize.shape)
+        print("vertices_from_obj",vertices_from_obj.shape)
+        print("vertices_from_obj2",vertices_from_obj2.shape)
+        vertices_from_obj_normalize -= vertices_from_obj_normalize.min(0)[0][None, :]
+        vertices_from_obj_normalize /= torch.abs(vertices_from_obj_normalize).max()
+        vertices_from_obj_normalize *= 2
+        vertices_from_obj_normalize -= vertices_from_obj_normalize.max(0)[0][None, :] / 2
+
+        ## re-assign
+        vertices_from_obj = vertices_from_obj_normalize[:2376,:]
+        vertices_from_obj2 = vertices_from_obj_normalize[2376:,:]
+        print("vertices_from_obj",vertices_from_obj.shape)
+        print("vertices_from_obj2",vertices_from_obj2.shape)
+
+        canon_sor_vtx_obj = vertices_from_obj.reshape(1,radcol_height,sor_circum,3)
+        canon_sor_vtx_obj2 = vertices_from_obj2.reshape(1,radcol_height2,sor_circum,3)
+
+        # print("vertices_from_obj shape",vertices_from_obj.shape)
+        # print("faces_from_obj shape",faces_from_obj.shape)
         print("canon_sor_vtx_obj shape",canon_sor_vtx_obj.shape)
+        print("canon_sor_vtx_obj2 shape",canon_sor_vtx_obj2.shape)
 
         ## get vertices from sor_curve
+        sor_curve = rendering.get_straight_sor_curve(radcol_height,device) ## TODO: testting
         canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum)  # BxHxTx3
         print("canon_sor_vtx shape",canon_sor_vtx.shape)
 
-        # test concatenate at dimension 1
+        canon_sor_vtx2 = rendering.get_sor_vtx(sor_curve2, sor_circum)  # BxHxTx3
+
+        ##TODO:hard code tranlation
+        test_txyz_obj2 = [[-0.6,0,0]]
+        txyz_obj2 = torch.FloatTensor(test_txyz_obj2).to(canon_sor_vtx2.device)
+        canon_sor_vtx2 = rendering.transform_pts(canon_sor_vtx2, None, txyz_obj2)
+
         #TODO:multi-obj
-        # canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_test_bend],1)
+        # test concatenate at dimension 1
+        canon_sor_vtx_obj = torch.cat([canon_sor_vtx_obj,canon_sor_vtx_obj2],1)
+        canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx2],1)
+        print("canon_sor_vtx_obj after cat",canon_sor_vtx_obj.shape)
+        print("canon_sor_vtx after cat",canon_sor_vtx.shape)
 
         ## test for relighting
         rxyz = pose[:,:3] / 180 * np.pi # 1x3
@@ -192,6 +242,7 @@ def main(in_dir, out_dir):
         normal_map_relighting = rendering.get_sor_quad_center_normal(sor_vtx_relighting)  # Bx(H-1)xTx3
 
         spec_alpha, spec_albedo = material.unbind(1)
+        spec_alpha2, spec_albedo2 = material2.unbind(1)
 
         ## replicate albedo
         wcrop_ratio = 1/6
@@ -201,18 +252,24 @@ def main(in_dir, out_dir):
         front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3)
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         
+        ##TODO:multiobject
+        albedo2 = rendering.gamma(albedo2)
+        front_albedo2 = torch.cat([albedo2[:,:,:,p:2*p].flip(3), albedo2[:,:,:,p:-p], albedo2[:,:,:,-2*p:-p].flip(3)], 3)
+        albedo_replicated2 = torch.cat([front_albedo2[:,:,:,:wcrop_tex_im].flip(3), front_albedo2, front_albedo2.flip(3), front_albedo2[:,:,:,:-wcrop_tex_im]], 3)
+        
         with torch.no_grad():
             if apply_bending_transform == True :
-                novel_views = render_views(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
+                novel_views = render_views(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated,albedo_replicated2, env_map, spec_alpha, spec_albedo, tx_size)
             else:
-                novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated, env_map, spec_alpha, spec_albedo, tx_size)
-            relightings = render_relight(renderer, cam_loc, sor_vtx_relighting, sor_vtx_map_relighting, sor_faces, normal_map_relighting, albedo_replicated, spec_alpha, spec_albedo, tx_size)
+                novel_views = render_views(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated,albedo_replicated2, env_map, spec_alpha, spec_albedo, tx_size)
+            # relightings = render_relight(renderer, cam_loc, sor_vtx_relighting, sor_vtx_map_relighting, sor_faces, normal_map_relighting, albedo_replicated, spec_alpha, spec_albedo, tx_size)
             [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
             utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
-            [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]
-            utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
+            # [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]
+            # utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220310_Obj_SampleView_37x24_ApplyOriginTransform'
-    out_dir = 'results/TestResults_20220310_Obj_SampleView_37x24_ApplyOriginTransform/animations'
-    main(in_dir, out_dir)
+    in_dir = 'results/TestResults_20220314_VaseTest'
+    in_dir2 = 'results/TestResults_20220308_Obj_SampleView_37x24'
+    out_dir = 'results/TestResults_20220314_MultiObjectTest/animations'
+    main(in_dir,in_dir2, out_dir)

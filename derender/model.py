@@ -95,7 +95,7 @@ class Derenderer():
     def load_model_state(self, cp):
         for k in cp:
             if k and k in self.network_names:
-                getattr(self, k).load_state_dict(cp[k])
+                getattr(self, k).load_state_dict(cp[k]) 
 
     def load_optimizer_state(self, cp):
         for k in cp:
@@ -318,8 +318,9 @@ class Derenderer():
 
         ## load origin obj
         self.vertices_from_obj, self.faces_from_obj = nr.load_obj(
-        os.path.join(self.in_dir, 'Obj/bend.obj'), load_texture=False, texture_size=8)
-        self.vertices_from_obj, self.faces_from_obj, _ = utils.parse3SweepObjData(self.radcol_height,self.sor_circum,self.vertices_from_obj,self.faces_from_obj,None)
+        os.path.join(self.in_dir, 'Obj/vase.obj'), load_texture=False, texture_size=8)
+        ##TODO: 99 crash
+        self.vertices_from_obj, self.faces_from_obj, _ = utils.parse3SweepObjData(99,self.sor_circum,self.vertices_from_obj,self.faces_from_obj,None)
 
         ## get custom sor_curve straight axis
         self.sor_curve = rendering.get_straight_sor_curve(self.radcol_height,self.device)
@@ -536,8 +537,8 @@ class Derenderer():
 
         ##TODO: save obj
         os.makedirs(os.path.join(save_dir, 'Obj'),exist_ok=True)
-        nr.save_obj(os.path.join(save_dir, 'Obj/bend.obj'),self.vertices_from_obj,self.faces_from_obj)
-        nr.save_obj(os.path.join(save_dir, 'Obj/straight.obj'),self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3))
+        nr.save_obj(os.path.join(save_dir, 'Obj/vase.obj'),self.vertices_from_obj,self.faces_from_obj)
+        nr.save_obj(os.path.join(save_dir, 'Obj/GeneratedStraightSoR.obj'),self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3))
 
     def save_scores(self, path):
         pass
