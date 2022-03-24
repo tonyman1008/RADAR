@@ -222,7 +222,7 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
 
 def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=None):
 
-    ##TODO: offset how to make sure
+    ##TODO: offset how to make sure ?
     initialIndexOffset = -3
 
     TopAndBottomFaceNumber = (sor_circum-2)*2
@@ -230,6 +230,7 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
     print("TopAndBottomFaceNumber",TopAndBottomFaceNumber)
     ## Vertices
     if vertices is not None:
+        ## set the 3Sweep indexing method to fit RADAR
         vertices[26:48] = torch.flip(vertices[26:48],[0])
         new_sor_vtx = vertices.clone()
         new_sor_vtx = torch.roll(new_sor_vtx,-24,0)
@@ -240,6 +241,9 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
         new_sor_vtx = new_sor_vtx.reshape(1,radcol_height,sor_circum,3) # 1xHxWx3
         new_sor_vtx = torch.roll(new_sor_vtx,initialIndexOffset,2)
         new_sor_vtx = new_sor_vtx.reshape(-1,3)
+
+        ## coordinate system, y & z is opposite
+        new_sor_vtx[:,1:]*=-1
 
      ## Face
     if faces is not None:
@@ -254,16 +258,30 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
         faces[indexWithoutFirstRow] -= sor_circum
 
         ## parse the initial position
-        # newFaces = torch.where((faces+initialIndexOffset)>=(faces//sor_circum)*sor_circum,faces+initialIndexOffset,faces+initialIndexOffset+sor_circum)
-
-        print("faces",faces.shape)
-        print("faces",faces.shape)
+        if initialIndexOffset < 0:
+            newFaces = torch.where((faces+initialIndexOffset)>=(faces//sor_circum)*sor_circum,faces+initialIndexOffset,faces+initialIndexOffset+sor_circum)
+        elif initialIndexOffset > 0:
+            newFaces = torch.where((faces+initialIndexOffset)>=((faces//sor_circum)+1)*sor_circum,faces+initialIndexOffset,faces+initialIndexOffset-sor_circum)
+        else:
+            newFaces = faces
+        print("newFaces",newFaces.shape)
 
     ## Texture (delete first 44 value in textures upper+lower circle)
     if textures is not None:
-        textures = textures[TopAndBottomFaceNumber:]    
+        textures = textures[TopAndBottomFaceNumber:] 
 
-    return new_sor_vtx,faces,textures
+    print("textures",textures.shape)
+    print("faces",faces.shape)
+    print("vertices",vertices.shape)
+
+    return new_sor_vtx,newFaces,textures
+
+def normalizeObjVertices(vertices):
+    vertices -= vertices.min(0)[0][None, :]
+    vertices /= torch.abs(vertices).max()
+    vertices *= 2
+    vertices -= vertices.max(0)[0][None, :] / 2
+    return vertices
 
 def load_imgs(flist):
     return torch.stack([torch.FloatTensor(cv2.imread(f) /255.).flip(2) for f in flist], 0).permute(0,3,1,2)

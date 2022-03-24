@@ -75,7 +75,6 @@ def get_sor_vtx(sor_curve, T):
     rs, hs = sor_curve.unbind(2)  # BxH radius column & height
     # print("rs",rs.shape)
     # print("hs",hs.shape)
-
     ## calculate the sor vertices 3d coordinates
     y = hs.view(b,h,1).repeat(1,1,T)  # BxHxT
     
@@ -83,8 +82,6 @@ def get_sor_vtx(sor_curve, T):
     thetas = torch.linspace(-math.pi, math.pi, T+1)[:-1].to(sor_curve.device)  # T
     x = rs.unsqueeze(2) * thetas.cos().view(1,1,T)  # BxHxT
     z = rs.unsqueeze(2) * thetas.sin().view(1,1,T)  # BxHxT
-    # print("x",x.shape)
-    # print("y",y.shape)
     # print("z",z.shape)
     sor_vtx = torch.stack([x, y, z], 3)  # BxHxTx3
     # print("sor_vtx",sor_vtx.shape)
@@ -146,42 +143,37 @@ def get_sor_full_face_idx(h, w):
     return torch.stack([faces1, faces2], 0).int()  # 2x(H-1)xWx3
 
 
-def get_sor_full_face_idx_hardCode(h, w):
-    # print("====get_sor_full_face_idx====")
-    # print("h",h)
-    # print("w",w)
-    ## test
-    idx_map = torch.arange(h*w).reshape(h,w)  # HxW
-    idx_map = torch.cat([idx_map, idx_map[:,:1]], 1)  # Hx(W+1), connect last column to first
-    # print("idx_map shape",idx_map.shape)
-    # print("idx_map",idx_map)
-    ## test
-    ##TODO:multi-obj
-    faces1 = torch.stack([idx_map[:98,:24], idx_map[1:99,:24], idx_map[:98,1:25]], -1)  # (H-1)xWx3
-    faces2 = torch.stack([idx_map[1:99,1:25], idx_map[:98,1:25], idx_map[1:99,:24]], -1)  # (H-1)xWx3
+def get_sor_full_face_idx_multiObjectTest(h1,h2, w):
+    # print("====get_sor_full_face_idx_multiObjectTest====")
 
-    # ##origin 2 triangles(faces) vertice index 
-    # faces1 = torch.stack([idx_map[:h-1,:w], idx_map[1:,:w], idx_map[:h-1,1:w+1]], -1)  # (H-1)xWx3
-    # faces2 = torch.stack([idx_map[1:,1:w+1], idx_map[:h-1,1:w+1], idx_map[1:,:w]], -1)  # (H-1)xWx3
+    ## test
+    total_h = h1 +h2
+    idx_map = torch.arange(total_h*w).reshape(total_h,w)  # HxW
+    idx_map = torch.cat([idx_map, idx_map[:,:1]], 1)  # Hx(W+1), connect last column to first
+
+    faces1 = torch.stack([idx_map[:h1-1,:w], idx_map[1:h1,:w], idx_map[:h1-1,1:w+1]], -1)  # (H-1)xWx3
+    faces2 = torch.stack([idx_map[1:h1,1:w+1], idx_map[:h1-1,1:w+1], idx_map[1:h1,:w]], -1)  # (H-1)xWx3
+
     print("faces1",faces1.shape)
     print("faces2",faces2.shape)
 
-    ##TODO:multi-obj
-    ## test the index is hard code now
-    faces3 = torch.stack([idx_map[99:h-1,:24], idx_map[100:,:24], idx_map[99:h-1,1:25]], -1)  # (H-1)xWx3
-    faces4 = torch.stack([idx_map[100:,1:25], idx_map[99:h-1,1:25], idx_map[100:,:24]], -1)  # (H-1)xWx3
+    faces3 = torch.stack([idx_map[h1:total_h-1,:w], idx_map[h1+1:,:w], idx_map[h1:total_h-1,1:w+1]], -1)  # (H-1)xWx3
+    faces4 = torch.stack([idx_map[h1+1:,1:w+1], idx_map[h1:total_h-1,1:w+1], idx_map[h1+1:,:w]], -1)  # (H-1)xWx3
     print("faces3",faces3.shape)
     print("faces4",faces4.shape)
 
-    ##TODO:multi-obj
+    ##TODO:multi-obj 
+    ## destructure (reshape) first 
     full_face_obj1 = torch.stack([faces1, faces2], 0).int()
     full_face_obj1 = full_face_obj1.reshape(1,-1,3);
 
     full_face_obj2 = torch.stack([faces3, faces4], 0).int()
     full_face_obj2 = full_face_obj2.reshape(1,-1,3);
+
+    ##concat two object then reshape back
+    full_face_allObjects = torch.cat([full_face_obj1,full_face_obj2],1).reshape(2,-1,w,3)
     print("full_face_obj1",full_face_obj1.shape)
     print("full_face_obj2",full_face_obj2.shape)
-    full_face_allObjects = torch.cat([full_face_obj1,full_face_obj2],1).reshape(2,-1,24,3)
     print("full_face_allObjects",full_face_allObjects.shape)
 
     ##TODO:multi-obj
@@ -336,18 +328,15 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
 
     ## renderer for visualization
     R = [[[1.,0.,0.],
-          [0.,-1.,0.], 
-          [0.,0.,1.]]]
+        [0.,1.,0.], 
+        [0.,0.,1.]]]
     R = torch.FloatTensor(R).to(device)
     t = torch.FloatTensor(world_ori).to(device)
     fx = image_size /2 /(math.tan(fov/2 *math.pi/180))
     fy = image_size /2 /(math.tan(fov/2 *math.pi/180))
     cx = image_size /2
     cy = image_size /2
-    # print("fx",fx)
-    # print("fy",fx)
-    # print("cx",cx)
-    # print("cy",cy)
+
     K = [[fx, 0., cx],
          [0., fy, cy],
          [0., 0., 1.]]
@@ -368,62 +357,50 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
 
 # dim_inside : darkness inside texture?
 ### render sor shape with texture(final result)
-def render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im2, tx_size=4, dim_inside=False, render_normal=False):
-    # b, H, T, _ = sor_vtx.shape
-    # print("====render_sor====")
+def render_sor_multiObjTest(renderer, sor_vtx, sor_faces,radcol_height,radcol_height2, tex_im,tex_im_2, tx_size=4, dim_inside=False, render_normal=False):
+    # print("====render_sor_multiObjTest====")
     # print("sor_vtx",sor_vtx.shape)
     # print("sor_faces",sor_faces.shape)
     # print("tex_im",tex_im.shape)
-    # print("tex_im2",tex_im2.shape)
+    # print("tex_im_2",tex_im_2.shape)
+
     b, _, H_, T_, _ = sor_faces.shape
-    
-    #TODO:multi-obj (dimension B?)
-    # tex_uv_grid = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    # tex_uv_grid_2 = get_tex_uv_grid(tx_size, H_//2+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
 
-    ##hard code
-    # print("H_",H_)
-    # print("T_",T_)
-    tex_uv_grid = get_tex_uv_grid(tx_size, 99, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    # tex_uv_grid = torch.zeros(2,99,24,8,8,2).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    tex_uv_grid_2 = get_tex_uv_grid(tx_size, 37, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    print("tex_uv_grid",tex_uv_grid.shape)
-    print("tex_uv_grid_2",tex_uv_grid_2.shape)
-
-    # tex_uv_grid = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
-    # print("tex_uv_grid",tex_uv_grid.shape)
+    tex_uv_grid = get_tex_uv_grid(tx_size, radcol_height, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+    tex_uv_grid_2 = get_tex_uv_grid(tx_size, radcol_height2, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
 
     if render_normal:
         tx_cube = torch.nn.functional.grid_sample(tex_im, tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
         tx_cube = tx_cube / (tx_cube**2).sum(1,keepdim=True)**0.5 /2+0.5
-        # tx_cube2 = torch.nn.functional.grid_sample(tex_im_2, tex_uv_grid_2.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
-        # tx_cube2 = tx_cube2 / (tx_cube2**2).sum(1,keepdim=True)**0.5 /2+0.5
+        tx_cube2 = torch.nn.functional.grid_sample(tex_im_2, tex_uv_grid_2.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
+        tx_cube2 = tx_cube2 / (tx_cube2**2).sum(1,keepdim=True)**0.5 /2+0.5
     else:
         tx_cube = torch.nn.functional.grid_sample(tex_im, tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
-        ##TODO:multi-obj 
-        tx_cube2 = torch.nn.functional.grid_sample(tex_im2, tex_uv_grid_2.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
-        # print("tx_cube grid_sample",tx_cube.shape)
-        # print("tx_cube2 grid_sample",tx_cube2.shape)
+        tx_cube2 = torch.nn.functional.grid_sample(tex_im_2, tex_uv_grid_2.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
     tx_cube = tx_cube.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
-    ##TODO:multi-obj 
     tx_cube2 = tx_cube2.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
-    print("tx_cube permute",tx_cube.shape)
-    print("tx_cube2 permute",tx_cube2.shape)
+
 
     sor_vtx = sor_vtx.reshape(b,-1,3)
     sor_faces = sor_faces.reshape(b,-1,3)
 
     # print("sor_vtx",sor_vtx.shape)
     # print("sor_faces",sor_faces.shape)
+    # print("tx_cube",tx_cube.shape)
 
+    ##TODO: dim_insdie UV error
     if dim_inside:
         # print("==dim inside True==")
         fill_back = renderer.fill_back
         renderer.fill_back = False
         # print("tx_cube",tx_cube.shape)
         # print("sor_faces",sor_faces.shape)
-        sor_faces = torch.cat([sor_faces, sor_faces.flip(2)], 1)
-        tx_cube = torch.cat([tx_cube, (tx_cube*0.5)], 1)
+        ## TODO: uv wrong
+        # sor_faces = torch.cat([sor_faces[:,:4704], sor_faces[:,:4704].flip(2),sor_faces[:,4704:],sor_faces[:,4704:].flip(2)], 1)
+        # tx_cube = torch.cat([tx_cube, (tx_cube*0.5)], 1)
+        # tx_cube2 = torch.cat([tx_cube2, (tx_cube2*0.5)], 1)
+        
+        # tx_cube=torch.cat([tx_cube,tx_cube2],1)
 
         ## TODO:multi-obj
         # tx_cube2 = torch.cat([tx_cube2, (tx_cube2*0.5).flip(1)], 1)
@@ -435,16 +412,37 @@ def render_sor(renderer, sor_vtx, sor_faces, tex_im,tex_im2, tx_size=4, dim_insi
         im_rendered = renderer.render_rgb(sor_vtx, sor_faces, tx_cube)
         renderer.fill_back = fill_back
     else:
-        # print("==dim inside False==")
-        # print("tx_cube",tx_cube.shape)
-        # print("tx_cube2",tx_cube2.shape)
-
-        ## TODO:multi-obj
         tx_cube=torch.cat([tx_cube,tx_cube2],1)
+        im_rendered = renderer.render_rgb(sor_vtx,sor_faces, tx_cube)
+    return im_rendered
 
-        print("final sor_vtx",sor_vtx.shape)
-        print("final sor_faces",sor_faces.shape)
-        print("final tx_cube",tx_cube.shape)
+### render sor shape with texture(final result)
+## origin method
+def render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=4, dim_inside=False, render_normal=False):
+
+    b, _, H_, T_, _ = sor_faces.shape
+    
+    tex_uv_grid = get_tex_uv_grid(tx_size, H_+1, T_+1).to(sor_vtx.device)  # Bx2xHxWxtxtx2
+
+    if render_normal:
+        tx_cube = torch.nn.functional.grid_sample(tex_im, tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
+        tx_cube = tx_cube / (tx_cube**2).sum(1,keepdim=True)**0.5 /2+0.5
+    else:
+        tx_cube = torch.nn.functional.grid_sample(tex_im, tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
+    tx_cube = tx_cube.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
+
+    sor_vtx = sor_vtx.reshape(b,-1,3)
+    sor_faces = sor_faces.reshape(b,-1,3)
+
+    if dim_inside:
+        fill_back = renderer.fill_back
+        renderer.fill_back = False
+        sor_faces = torch.cat([sor_faces, sor_faces.flip(2)], 1)
+        tx_cube = torch.cat([tx_cube, (tx_cube*0.5)], 1)
+        
+        im_rendered = renderer.render_rgb(sor_vtx, sor_faces, tx_cube)
+        renderer.fill_back = fill_back
+    else:
         im_rendered = renderer.render_rgb(sor_vtx,sor_faces, tx_cube)
     return im_rendered
 
@@ -460,8 +458,8 @@ def render_material(renderer, spec_alpha, spec_albedo_scalar):
     env_map = torch.ones(b,16,48).to(device) *0.02
     env_map[:, 3, 5] = 4
     albedo = torch.ones(b, 3, tex_im_h, tex_im_w).to(device) *1
-    ori_z = 5
-    cam_loc = torch.FloatTensor([0,0,0]).to(device)
+    ori_z = 12.5
+    cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device)
     fov = 10
     max_range = math.tan(fov/2/180*math.pi) *ori_z
 
@@ -483,8 +481,8 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     b = canon_sor_vtx.size(0)
     device = canon_sor_vtx.device
     tx_size = 8
-    ori_z = 5
-    cam_loc = torch.FloatTensor([0,0,0]).to(device)
+    ori_z = 12.5
+    cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device)
 
     rxyz = torch.FloatTensor([0, 30, 0]).repeat(b,1).to(device) /180*math.pi
     sor_vtx = transform_pts(canon_sor_vtx, rxyz, None)

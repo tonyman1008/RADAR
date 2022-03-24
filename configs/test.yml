@@ -4,18 +4,23 @@ run_test: true
 batch_size: 1
 checkpoint_dir: results/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220314_MultiObjectTest
+test_result_dir: results/TestResults_20220324_Vase
 
 ## dataloader
 image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_data_dir: data/TestData_20220314_MultiObjectTest
+test_data_dir: data/TestData_20220324_Vase
+
+## parameter
+component_size: 2
+obj_name: '1'
+is_bend_obj: true
 
 ## model
 model_name: derender_vase
-radcol_height: 36
+radcol_height: 98
 sor_circum: 24
 tex_im_h: 256
 tex_im_w: 768
@@ -45,5 +50,5 @@ lam_GAN: 0.01
 
 ## renderer
 fov: 10  # in degrees
-ori_z: 5
+ori_z: 12.5
 tx_size: 8  # 4, 8

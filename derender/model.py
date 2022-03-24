@@ -23,25 +23,21 @@ class Derenderer():
         self.env_map_h = cfgs.get('env_map_h', 32)
         self.env_map_w = cfgs.get('env_map_w', 64) #unused
         self.fov = cfgs.get('fov', 10)
-        self.ori_z = cfgs.get('ori_z', 5)
+        self.ori_z = cfgs.get('ori_z', 12.5)
         self.x_rotation_min = cfgs.get('x_rotation_min', -10)
         self.x_rotation_max = cfgs.get('x_rotation_max', 10)
         self.z_rotation_min = cfgs.get('z_rotation_min', -10)
         self.z_rotation_max = cfgs.get('z_rotation_max', 10)
         self.xy_translation_range = cfgs.get('xy_translation_range', 0.2)
-        self.max_range = math.tan(self.fov/2/180*math.pi) *self.ori_z*2.5
-        self.min_depth = self.ori_z*2.5 - self.max_range
-        self.max_depth = self.ori_z*2.5 + self.max_range
+        self.max_range = math.tan(self.fov/2/180*math.pi) *self.ori_z
+        self.min_depth = self.ori_z - self.max_range
+        self.max_depth = self.ori_z + self.max_range
         self.min_hscale = cfgs.get('min_hscale', 0.5)
         self.max_hscale = cfgs.get('max_hscale', 0.9)
         self.spec_albedo_min = cfgs.get('spec_albedo_min', 0.)
         self.spec_albedo_max = cfgs.get('spec_albedo_max', 1.)
         self.tx_size = cfgs.get('tx_size', 4)
-        self.renderer = rendering.get_renderer(world_ori=[0, 0, self.ori_z*2.5], image_size=self.image_size, fov=self.fov, fill_back=True, device=self.device)
-
-        ##TODO Testing
-        self.in_dir = cfgs.get('test_data_dir',None) ## Testing
-
+        self.renderer = rendering.get_renderer(world_ori=[0, 0, self.ori_z], image_size=self.image_size, fov=self.fov, fill_back=True, device=self.device)
 
         ## losses
         self.lam_mask = cfgs.get('lam_mask', 1)
@@ -54,12 +50,21 @@ class Derenderer():
         self.lam_GAN = cfgs.get('lam_GAN', 0)
         self.sample_patch_size = cfgs.get('sample_patch_size', 64)
 
+        ##TODO: custom parameter
+        self.obj_name = cfgs.get('obj_name','1')
+        self.in_dir = cfgs.get('test_data_dir',None) ## Testing
+        self.is_bend_obj = cfgs.get('is_bend_obj',False)
+
         print("====model initialize====")
         print("radcol_height",self.radcol_height)
 
         ## networks and optimizers
         self.lr = cfgs.get('lr', 1e-4)
-        self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=self.radcol_height, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
+        ##TODO: hard code set netR out_size to be 36, because the radcol_height set to bigger will trigger crash
+        if self.is_bend_obj == True:
+            self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=32, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
+        else:
+            self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=self.radcol_height, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
         self.netT = UnetGenerator(input_nc=3, output_nc=3, num_downs=6, ngf=64, norm_layer=nn.InstanceNorm2d, use_dropout=False, f_act=nn.Tanh)
         self.netE = EnvMapNet(cin=6, cout=1, cout2=2, in_size=self.image_size, out_size=self.env_map_h, nf=64, zdim=128, activation=nn.Sigmoid)  # spec_alpha, spec_albedo
         self.netD = DiscNet(cin=3, cout=1, nf=64, norm=nn.InstanceNorm2d, activation=None)
@@ -72,7 +77,6 @@ class Derenderer():
         ## other parameters
         self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum)  # 2x(H-1)xWx3
         self.other_param_names = ['sor_faces', 'criterionGAN']
-
         print("sor_faces",self.sor_faces.shape)
 
         ## range rescalers
@@ -223,12 +227,14 @@ class Derenderer():
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
 
         ## render mask
+        print("self.sor_vtx",self.sor_vtx.shape)
+        print("self.sor_faces",self.sor_faces.shape)
         self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
 
         ## sample frontal texture map
         self.sor_vtx_map = rendering.get_sor_quad_center_vtx(self.sor_vtx)  # Bx(H-1)xTx3
         wcrop_tex_im = int(self.wcrop_ratio *self.tex_im_w//2)
-        self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z*2.5], self.input_im)
+        self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z], self.input_im)
 
         ## predict albedo
         self.front_tex_im_gt_cropped = self.front_tex_im_gt[:,:,:,wcrop_tex_im:-wcrop_tex_im]  # 128x128
@@ -312,19 +318,22 @@ class Derenderer():
         self.mask_gt_dt = mask_gt_dt.to(self.device)
         b, c, h, w = self.input_im.shape
 
-        ##TODO: Camera pose for render animation
-        self.rxyz = torch.zeros(1,3)
-        self.txy = torch.zeros(1,2)
-
         ## load origin obj
         self.vertices_from_obj, self.faces_from_obj = nr.load_obj(
-        os.path.join(self.in_dir, 'Obj/vase.obj'), load_texture=False, texture_size=8)
-        ##TODO: 99 crash
-        self.vertices_from_obj, self.faces_from_obj, _ = utils.parse3SweepObjData(99,self.sor_circum,self.vertices_from_obj,self.faces_from_obj,None)
+        os.path.join(self.in_dir, self.obj_name+'.obj'),normalization=False, load_texture=False, texture_size=8)
+        print("vertices_from_obj",self.vertices_from_obj.shape)
+        print("faces_from_obj",self.faces_from_obj.shape)
 
         ## get custom sor_curve straight axis
         self.sor_curve = rendering.get_straight_sor_curve(self.radcol_height,self.device)
         self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum) # BxHxTx3
+        print("vertices_from_obj",self.vertices_from_obj.shape)
+
+        # self.vertices_from_obj = self.vertices_from_obj.reshape(b,self.radcol_height,self.sor_circum,3)
+
+        ##TODO: Camera pose for render animation
+        self.rxyz = torch.zeros(1,3)
+        self.txy = torch.zeros(1,2)
 
         ## get sor vertices map
         self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, None, None)
@@ -339,7 +348,7 @@ class Derenderer():
         ## sample frontal texture map
         self.sor_vtx_map = rendering.get_sor_quad_center_vtx(self.sor_vtx)  # Bx(H-1)xTx3
         wcrop_tex_im = int(self.wcrop_ratio * self.tex_im_w//2)
-        self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z*2.5], self.input_im)
+        self.front_tex_im_gt = rendering.unwrap_sor_front_tex_im(self.sor_vtx_map[:,:,:self.sor_circum//2,:], self.tex_im_h, self.tex_im_w//2, self.renderer.K, [0, 0, self.ori_z], self.input_im)
 
         ## predict albedo
         self.front_tex_im_gt_cropped = self.front_tex_im_gt[:,:,:,wcrop_tex_im:-wcrop_tex_im]  # 128x128
@@ -361,7 +370,7 @@ class Derenderer():
         self.spec_alpha = self.spec_alpha_rescaler(self.light_params[:,0])
         self.spec_albedo_scalar = self.spec_albedo_rescaler(self.light_params[:,1])
         self.spec_albedo = self.spec_albedo_scalar.view(b,1,1,1)
-        cam_loc = torch.FloatTensor([0,0,0]).to(self.device)
+        cam_loc = torch.FloatTensor([0,0,-self.ori_z]).to(self.device)
         self.diffuse, self.specular = rendering.envmap_phong_shading(self.sor_vtx_map, self.normal_map, cam_loc, self.env_map, self.spec_alpha)
         self.tex_im = rendering.compose_shading(self.albedo, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
 
@@ -536,9 +545,11 @@ class Derenderer():
         save_images(novel_view_mask_rendered.unsqueeze(1).repeat(1,3,1,1), 'novel_view_mask_rendered')
 
         ##TODO: save obj
-        os.makedirs(os.path.join(save_dir, 'Obj'),exist_ok=True)
-        nr.save_obj(os.path.join(save_dir, 'Obj/vase.obj'),self.vertices_from_obj,self.faces_from_obj)
-        nr.save_obj(os.path.join(save_dir, 'Obj/GeneratedStraightSoR.obj'),self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3))
+        if self.vertices_from_obj != None:
+            os.makedirs(os.path.join(save_dir, 'Obj'),exist_ok=True)
+            self.vertices_from_obj = self.vertices_from_obj.reshape(-1,3)
+            nr.save_obj(os.path.join(save_dir, 'Obj',self.obj_name+'.obj'),self.vertices_from_obj,self.faces_from_obj)
+            nr.save_obj(os.path.join(save_dir, 'Obj',self.obj_name+'_straight.obj'),self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3))
 
     def save_scores(self, path):
         pass
