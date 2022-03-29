@@ -8,7 +8,7 @@ import torchvision
 import imageio
 import yaml
 import zipfile
-
+import neural_renderer as nr
 
 def setup_runtime(args):
     """Load configs, initialize CUDA, CuDNN and the random seeds."""
@@ -123,6 +123,7 @@ def save_images(out_fold, imgs, prefix='', suffix='', sep_folder=True, ext='.png
     offset = len(glob.glob(os.path.join(out_fold, prefix+'*'+suffix+ext))) +1
 
     imgs = imgs.transpose(0,2,3,1)
+
     for i, img in enumerate(imgs):
         if 'depth' in suffix:
             im_out = np.uint16(img[...,::-1]*65535.)
@@ -137,7 +138,7 @@ def save_videos(out_fold, imgs, prefix='', suffix='', sep_folder=True, ext='.mp4
     os.makedirs(out_fold, exist_ok=True)
     prefix = prefix + '_' if prefix else ''
     suffix = '_' + suffix if suffix else ''
-    offset = len(glob.glob(os.path.join(out_fold, prefix+'*'+suffix+ext))) +1
+    offset = len(glob.glob(os.path.join(out_fold,prefix  +'*'+suffix+ext))) +1
 
     imgs = imgs.transpose(0,1,3,4,2)  # BxTxCxHxW -> BxTxHxWxC
     for i, fs in enumerate(imgs):
@@ -173,8 +174,18 @@ def save_txt(out_fold, data, prefix='', suffix='', sep_folder=True, ext='.txt'):
     prefix = prefix + '_' if prefix else ''
     suffix = '_' + suffix if suffix else ''
     offset = len(glob.glob(os.path.join(out_fold, prefix+'*'+suffix+ext))) +1
-
+    print()
     [np.savetxt(os.path.join(out_fold, prefix+'%05d'%(i+offset)+suffix+ext), d, fmt='%.6f', delimiter=', ') for i,d in enumerate(data)]
+
+def save_obj(out_fold, vertices_obj,faces_obj, prefix='', suffix='', sep_folder=True, ext='.obj'):
+    if sep_folder:
+        out_fold = os.path.join(out_fold, suffix)
+    os.makedirs(out_fold, exist_ok=True)
+    prefix = prefix + '_' if prefix else ''
+    suffix = '_' + suffix if suffix else ''
+    offset = len(glob.glob(os.path.join(out_fold, prefix+'*'+suffix+ext))) +1
+    ##TODO: batch size?
+    nr.save_obj(os.path.join(out_fold, prefix+'%05d'%(offset)+suffix+ext),vertices_obj,faces_obj) 
 
 
 def compute_sc_inv_err(d_pred, d_gt, mask=None):
@@ -220,14 +231,13 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
     patches = torch.nn.functional.grid_sample(im.repeat(num_patch,1,1,1), xy_grid.to(im.device), mode='bilinear', align_corners=False).view(num_patch,b,c,patch_size,patch_size).transpose(1,0)
     return patches  # BxNxCxHxW
 
-def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=None):
+def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=None,indexOffset=0):
 
     ##TODO: offset how to make sure ?
-    initialIndexOffset = -3
+    initialIndexOffset = indexOffset
 
     TopAndBottomFaceNumber = (sor_circum-2)*2
     verticesNum = vertices.shape[0]
-    print("TopAndBottomFaceNumber",TopAndBottomFaceNumber)
     ## Vertices
     if vertices is not None:
         ## set the 3Sweep indexing method to fit RADAR
@@ -270,10 +280,6 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
     if textures is not None:
         textures = textures[TopAndBottomFaceNumber:] 
 
-    print("textures",textures.shape)
-    print("faces",faces.shape)
-    print("vertices",vertices.shape)
-
     return new_sor_vtx,newFaces,textures
 
 def normalizeObjVertices(vertices):
@@ -283,8 +289,3 @@ def normalizeObjVertices(vertices):
     vertices -= vertices.max(0)[0][None, :] / 2
     return vertices
 
-def load_imgs(flist):
-    return torch.stack([torch.FloatTensor(cv2.imread(f) /255.).flip(2) for f in flist], 0).permute(0,3,1,2)
-
-def load_txts(flist):
-    return torch.stack([torch.FloatTensor(np.loadtxt(f, delimiter=',')) for f in flist], 0)

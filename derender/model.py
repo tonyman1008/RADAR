@@ -17,7 +17,7 @@ class Derenderer():
         self.image_size = cfgs.get('image_size', 256)
         self.wcrop_ratio = 1/6  # ratio of width to be cropped out for perspective projection
         self.radcol_height = cfgs.get('radcol_height', 32)
-        self.sor_circum = cfgs.get('sor_circum', 96)
+        self.sor_circum = cfgs.get('sor_circum', 24)
         self.tex_im_h = cfgs.get('tex_im_h', 256)
         self.tex_im_w = cfgs.get('tex_im_w', 768)
         self.env_map_h = cfgs.get('env_map_h', 32)
@@ -51,17 +51,14 @@ class Derenderer():
         self.sample_patch_size = cfgs.get('sample_patch_size', 64)
 
         ##TODO: custom parameter
-        self.obj_name = cfgs.get('obj_name','1')
         self.in_dir = cfgs.get('test_data_dir',None) ## Testing
-        self.is_bend_obj = cfgs.get('is_bend_obj',False)
+        self.load_obj = cfgs.get('load_obj',False)
 
         print("====model initialize====")
-        print("radcol_height",self.radcol_height)
 
         ## networks and optimizers
         self.lr = cfgs.get('lr', 1e-4)
-        ##TODO: hard code set netR out_size to be 36, because the radcol_height set to bigger will trigger crash
-        if self.is_bend_obj == True:
+        if self.load_obj == True:
             self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=32, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
         else:
             self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=self.radcol_height, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
@@ -75,9 +72,8 @@ class Derenderer():
             lr=lr, betas=(0.9, 0.999))
 
         ## other parameters
-        self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum)  # 2x(H-1)xWx3
         self.other_param_names = ['sor_faces', 'criterionGAN']
-        print("sor_faces",self.sor_faces.shape)
+        self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum)  # 2x(H-1)xWx3
 
         ## range rescalers
         self.rad_col_rescaler = lambda x : x *0.9 +0.05
@@ -227,8 +223,6 @@ class Derenderer():
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
 
         ## render mask
-        print("self.sor_vtx",self.sor_vtx.shape)
-        print("self.sor_faces",self.sor_faces.shape)
         self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
 
         ## sample frontal texture map
@@ -305,10 +299,17 @@ class Derenderer():
     def forward_test(self, input):
         print("====forward_test====")
         if isinstance(input, tuple) or isinstance(input, list):
-            input_im, mask_gt, mask_gt_dt = input
-            print("input",input)
-            mask_gt = mask_gt[:,0,:,:]
-            mask_gt_dt = mask_gt_dt / self.image_size
+            if self.load_obj:
+                input_im, path_obj = input
+                mask_gt = input_im[:,0,:,:] *0+1
+                mask_gt_dt = input_im[:,0,:,:] *0
+                print("path obj",path_obj)
+                vertices_obj, faces_obj = nr.load_obj(path_obj[0],normalization=False, load_texture=False, texture_size=8)
+            else:
+                input_im, mask_gt, mask_gt_dt = input
+                print("input",input)
+                mask_gt = mask_gt[:,0,:,:]
+                mask_gt_dt = mask_gt_dt / self.image_size
         else:
             input_im = input
             mask_gt = input_im[:,0,:,:] *0+1
@@ -316,20 +317,27 @@ class Derenderer():
         self.input_im = input_im.to(self.device)
         self.mask_gt = mask_gt.to(self.device)
         self.mask_gt_dt = mask_gt_dt.to(self.device)
+
+
+        self.vertices_obj = vertices_obj.to(self.device)
+        self.faces_obj = faces_obj.to(self.device)
         b, c, h, w = self.input_im.shape
 
-        ## load origin obj
-        self.vertices_from_obj, self.faces_from_obj = nr.load_obj(
-        os.path.join(self.in_dir, self.obj_name+'.obj'),normalization=False, load_texture=False, texture_size=8)
-        print("vertices_from_obj",self.vertices_from_obj.shape)
-        print("faces_from_obj",self.faces_from_obj.shape)
+        print("batch",b)
+        print("vertices_obj shape",vertices_obj.shape)
+        print("faces_obj shape",faces_obj.shape)
+
+        ##TODO: reset the initial radcol_height and sor_faces
+        if self.load_obj == True:
+            self.radcol_height = self.vertices_obj.shape[0]//self.sor_circum
+            self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum).to(self.device)  # 2x(H-1)xWx3
+            print("radcol_height",self.radcol_height)
+            print("sor_faces shape",self.sor_faces.shape)
 
         ## get custom sor_curve straight axis
         self.sor_curve = rendering.get_straight_sor_curve(self.radcol_height,self.device)
         self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum) # BxHxTx3
-        print("vertices_from_obj",self.vertices_from_obj.shape)
-
-        # self.vertices_from_obj = self.vertices_from_obj.reshape(b,self.radcol_height,self.sor_circum,3)
+        print("canon_sor_vtx",self.canon_sor_vtx.shape)
 
         ##TODO: Camera pose for render animation
         self.rxyz = torch.zeros(1,3)
@@ -338,9 +346,6 @@ class Derenderer():
         ## get sor vertices map
         self.sor_vtx = rendering.transform_pts(self.canon_sor_vtx, None, None)
         self.normal_map = rendering.get_sor_quad_center_normal(self.sor_vtx)  # Bx(H-1)xTx3
-        print("canon_sor_vtx",self.canon_sor_vtx.shape)
-        print("sor_vtx",self.sor_vtx.shape)
-        print("normal_map",self.normal_map.shape)
 
         ## render mask
         self.mask_rendered = self.renderer.render_silhouettes(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1))
@@ -510,6 +515,8 @@ class Derenderer():
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)
         def save_txt(data, suffix):
             utils.save_txt(save_dir, data.detach().cpu().numpy(), suffix=suffix, sep_folder=True)
+        def save_obj(vertices,faces,suffix):
+            utils.save_obj(save_dir,vertices,faces,suffix=suffix,sep_folder=True)
 
         save_images(self.input_im, 'input_image')
         save_images(self.im_rendered, 'im_rendered')
@@ -538,18 +545,15 @@ class Derenderer():
         ## other rendering
         material_rendered = rendering.render_material(self.renderer, self.spec_alpha, self.spec_albedo_scalar)
         save_images(material_rendered, 'material_rendered')
-        ##TODO: pass bend vertices into renderer
         novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
-        # novel_view_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
         save_images(novel_view_rendered, 'novel_view_rendered')
         save_images(novel_view_mask_rendered.unsqueeze(1).repeat(1,3,1,1), 'novel_view_mask_rendered')
 
-        ##TODO: save obj
-        if self.vertices_from_obj != None:
-            os.makedirs(os.path.join(save_dir, 'Obj'),exist_ok=True)
-            self.vertices_from_obj = self.vertices_from_obj.reshape(-1,3)
-            nr.save_obj(os.path.join(save_dir, 'Obj',self.obj_name+'.obj'),self.vertices_from_obj,self.faces_from_obj)
-            nr.save_obj(os.path.join(save_dir, 'Obj',self.obj_name+'_straight.obj'),self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3))
+        # novel_view_with_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
+
+        if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
+            save_obj(self.vertices_obj,self.faces_obj,'obj_parsed')
+            save_obj(self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3),'obj_straight_axis')
 
     def save_scores(self, path):
         pass

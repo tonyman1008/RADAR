@@ -1,30 +1,18 @@
 import numpy as np
 import torch
 
-faces1 = torch.zeros(3,2,3)+1
-faces2 = torch.zeros(3,2,3)+2
 
-faces3 = torch.zeros(4,2,3)+3
-faces4 = torch.zeros(4,2,3)+4
+h_list = [10,20,30]
+total_h = sum(h_list)
+component_size = len(h_list)
 
-full_face_obj1 = torch.stack([faces1, faces2], 0).int()
-full_face_obj2 = torch.stack([faces3, faces4], 0).int()
-full_face_allObjects = torch.cat([full_face_obj1,full_face_obj2],1)
-print("full_face_obj1",full_face_obj1.shape)
-print("full_face_obj1",full_face_obj1)
-print("full_face_obj2",full_face_obj2.shape)
-print("full_face_obj2",full_face_obj2)
-print("full_face_allObjects",full_face_allObjects.shape)
+# for i in range(component_size):
+#     h_start = sum(h_list[:i])
+#     h_end = sum(h_list[:i+1])
+#     print("h_start",h_start)
+#     print("h_end",h_end)
 
-# full_face_obj1 = torch.cat([faces1, faces3], 0).int()
-# full_face_obj2 = torch.cat([faces2, faces4], 0).int()
-# full_face_allObjects = torch.stack([full_face_obj1,full_face_obj2],0)
-# print("full_face_obj1",full_face_obj1.shape)
-# print("full_face_obj1",full_face_obj1)
-# print("full_face_obj2",full_face_obj2.shape)
-# print("full_face_obj2",full_face_obj2)
-# print("full_face_allObjects",full_face_allObjects.shape)
+for test in range(len(h_list)):
+    h_list[test] += 10
 
-full_face_allObjects = full_face_allObjects.reshape(1,-1,3)
-print("full_face_allObjects",full_face_allObjects.shape)
-print("full_face_allObjects",full_face_allObjects)
+print(h_list)

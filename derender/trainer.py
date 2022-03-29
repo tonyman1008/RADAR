@@ -141,7 +141,6 @@ class Trainer():
         else:
             print(f"Starting validation epoch {epoch}")
             self.model.set_eval()
-
         for iter, input in enumerate(loader):
             if is_train:
                 m = self.model.forward(input)

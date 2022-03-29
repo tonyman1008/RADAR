@@ -2,25 +2,24 @@
 ## trainer
 run_test: true
 batch_size: 1
-checkpoint_dir: results/met_vase_pretrained
+checkpoint_dir: officialResults/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220324_Vase
+test_result_dir: results/TestResults_20220329_teapot_1_autoTest
 
 ## dataloader
 image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_data_dir: data/TestData_20220324_Vase
+test_data_dir: data/TestData_20220329_teapot_1_autoTest
 
 ## parameter
-component_size: 2
-obj_name: '1'
-is_bend_obj: true
+load_obj: true
+images_obj_dnames: ['images','objs']
 
 ## model
 model_name: derender_vase
-radcol_height: 98
+# radcol_height: 39 #TODO: multiOjbect
 sor_circum: 24
 tex_im_h: 256
 tex_im_w: 768
