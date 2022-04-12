@@ -274,7 +274,6 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
             newFaces = torch.where((faces+initialIndexOffset)>=((faces//sor_circum)+1)*sor_circum,faces+initialIndexOffset,faces+initialIndexOffset-sor_circum)
         else:
             newFaces = faces
-        print("newFaces",newFaces.shape)
 
     ## Texture (delete first 44 value in textures upper+lower circle)
     if textures is not None:

@@ -202,8 +202,8 @@ def main(in_dir, out_dir):
         front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3)
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         albedo_replicated_list.append(albedo_replicated)
-        # utils.save_images(out_dir, albedo_replicated.cpu().numpy(), suffix='albedo_replicated', sep_folder=True)
-        # utils.save_images(out_dir, front_albedo.cpu().numpy(), suffix='front_albedo', sep_folder=True)
+        utils.save_images(out_dir, albedo_replicated.cpu().numpy(), suffix='albedo_replicated', sep_folder=True)
+        utils.save_images(out_dir, front_albedo.cpu().numpy(), suffix='front_albedo', sep_folder=True)
 
     ## get sor_faces with all component
     sor_faces = rendering.get_sor_full_face_idx_multiObject(radcol_height_list, sor_circum).to(device)  # 2x(H-1)xWx3
@@ -254,6 +254,6 @@ def main(in_dir, out_dir):
         utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220329_teapot_1_autoTest'
-    out_dir = 'results/TestResults_20220329_teapot_1_autoTest/animations'
+    in_dir = 'results/TestResults_20220411_antiques_1'
+    out_dir = 'results/TestResults_20220411_antiques_1/animations'
     main(in_dir, out_dir)
