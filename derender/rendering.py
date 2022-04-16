@@ -84,7 +84,7 @@ def get_sor_vtx(sor_curve, T):
 
 def get_straight_sor_curve(H,device):
     scale = 0.75
-    curve_x = 0.35
+    curve_x = 0.8
     curve_y = 1.3
 
     r_col = (torch.FloatTensor([curve_x])*scale).repeat(1,H).to(device)

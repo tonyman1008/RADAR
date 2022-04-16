@@ -254,6 +254,6 @@ def main(in_dir, out_dir):
         utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220411_antiques_1'
-    out_dir = 'results/TestResults_20220411_antiques_1/animations'
+    in_dir = 'results/TestResults_20220412_spout_vase_biggerCurveX'
+    out_dir = 'results/TestResults_20220412_spout_vase_biggerCurveX/animations'
     main(in_dir, out_dir)
