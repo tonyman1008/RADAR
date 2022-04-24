@@ -189,7 +189,7 @@ def save_obj(out_fold, vertices_obj,faces_obj, prefix='', suffix='', sep_folder=
 
 def save_images_objs_pair_data(out_fold_root,imgs,vertices_obj,faces_obj,dataName):
 
-    out_fold_imgs = os.path.join(out_fold_root, 'imgs')
+    out_fold_imgs = os.path.join(out_fold_root, 'images')
     out_fold_objs = os.path.join(out_fold_root, 'objs')
 
     os.makedirs(out_fold_imgs, exist_ok=True)
