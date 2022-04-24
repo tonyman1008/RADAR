@@ -187,6 +187,23 @@ def save_obj(out_fold, vertices_obj,faces_obj, prefix='', suffix='', sep_folder=
     ##TODO: batch size?
     nr.save_obj(os.path.join(out_fold, prefix+'%05d'%(offset)+suffix+ext),vertices_obj,faces_obj) 
 
+def save_images_objs_pair_data(out_fold_root,imgs,vertices_obj,faces_obj,dataName):
+
+    out_fold_imgs = os.path.join(out_fold_root, 'imgs')
+    out_fold_objs = os.path.join(out_fold_root, 'objs')
+
+    os.makedirs(out_fold_imgs, exist_ok=True)
+    os.makedirs(out_fold_objs, exist_ok=True)
+
+    ##TODO: batch size?
+    nr.save_obj(os.path.join(out_fold_objs, dataName+'.obj'),vertices_obj,faces_obj) 
+
+    imgs = imgs.transpose(0,2,3,1)
+    for i, img in enumerate(imgs):
+        im_out = np.uint8(img[...,::-1]*255.)
+        cv2.imwrite(os.path.join(out_fold_imgs, dataName+'.png'), im_out)
+
+
 
 def compute_sc_inv_err(d_pred, d_gt, mask=None):
     b = d_pred.size(0)

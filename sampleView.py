@@ -11,7 +11,6 @@ import sys
 def sampleView(objFolder, objIndex):
     print("====Start Sample View====")
 
-    objName = objIndex + '.obj'
 
     ## same camera parameter with RADAR
     image_size = 256
@@ -20,51 +19,43 @@ def sampleView(objFolder, objIndex):
     world_ori=[0,0,ori_z] ## make sure the camera pose is the same
     sor_circum = 24
 
+    # initial setting
     device = 'cuda:0'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     input_dir = current_dir + '/3SweepData/' + objFolder
-    save_dir = current_dir + '/3SweepData/' + objFolder +'/' + objIndex
+    test_save_dir = current_dir + '/3SweepData/' + objFolder +'/' + objIndex
+    test_dataSet_dir = current_dir + '/3SweepData/' + objFolder +'/TestData/' # final test data folder
+
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
 
+    # load obj
     vertices, faces, textures = nr.load_obj(
-        os.path.join(input_dir, objName),normalization=False, load_texture=True, texture_size=8)
+        os.path.join(input_dir, objIndex+'.obj'),normalization=False, load_texture=True, texture_size=8)
 
+    # parse the object data
     radcol_height = vertices.shape[0] // sor_circum
     vertices, faces, textures = parse3SweepObjData(radcol_height,sor_circum,renderer.K,world_ori,image_size,vertices,faces,textures)
 
     # save parse object
-    utils.save_obj(save_dir,vertices,faces,suffix='obj_parsed',sep_folder=True)
-
-    ## normalize
-    vertices = utils.normalizeObjVertices(vertices)
-
-    # # save parsed and normalize object
-    # utils.save_obj(save_dir,vertices,faces,suffix='obj_parsed_normalize',sep_folder=True)
+    utils.save_obj(test_save_dir,vertices,faces,suffix='obj_parsed',sep_folder=True)
 
     # sample front view with straight axis object
     sor_curve = rendering.get_straight_sor_curve(radcol_height,device)
     canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum) # BxHxTx3
-
     images = renderer.render_rgb(canon_sor_vtx.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
-    utils.save_images(save_dir, images.detach().cpu().numpy(), suffix='sample_view', sep_folder=True)
+    utils.save_images(test_save_dir, images.detach().cpu().numpy(), suffix='sample_view', sep_folder=True)
+
+    ## save the final data
+    utils.save_images_objs_pair_data(test_dataSet_dir,images.detach().cpu().numpy(),vertices,faces,objIndex)
 
     print("====Sample view complete！====")
 
-def get_vtx_indexing_offset(vertices,sor_circum,K,world_ori,image_size):
-
-    # # first row vertices
-    # vertices_2D = rendering.vtx_3d_to_2d(vertices[:24,:].reshape(1,-1,3),K,world_ori,image_size,image_size)
-
-    # # get the left most vertices index in 2d space coordinate
-    # index = torch.argmin(vertices_2D[:,:,:1]).item()
-    # print("index",index)
-
-    # # for roll the row vertices, set to negative
-    # offset = index * -1
-    # print("offset",offset)
+def get_vtx_indexing_offset(vertices):
 
     ## get the most close to the camera vertice of first row vertices
     mostClosedVerticeIndex = torch.argmax(vertices[:24,-1:]).item() 
+
+    # print("vertices",vertices[:24,-1:])
 
     ## half 
     leftMostVerticeIndex = mostClosedVerticeIndex - 6
@@ -90,8 +81,7 @@ def parse3SweepObjData(radcol_height,sor_circum,K,world_ori,image_size,vertices,
         new_sor_vtx[-24:] = vertices[24:48]
 
         # indexing start offset
-        initialIndexOffset = get_vtx_indexing_offset(new_sor_vtx,sor_circum,K,world_ori,image_size)
-        # initialIndexOffset = -2
+        initialIndexOffset = get_vtx_indexing_offset(new_sor_vtx)
 
         ## roll the circum vertices to fit RADAR initial indexing position
         new_sor_vtx = new_sor_vtx.reshape(1,radcol_height,sor_circum,3) # 1xHxWx3
@@ -132,6 +122,9 @@ def parse3SweepObjData(radcol_height,sor_circum,K,world_ori,image_size,vertices,
     return new_sor_vtx,newFaces,textures
 
 if __name__ == '__main__':
-    objFolder = 'TestData_20220321_smokeTube'
-    objIndex = '1'
-    sampleView(objFolder, objIndex)
+    objFolder = 'TestData_20220418/DP_16489_065'
+    objNum = 2
+    for i in range(objNum):
+        indexStr = str(i +1)
+        print("indexName",indexStr)
+        sampleView(objFolder, indexStr)

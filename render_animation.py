@@ -252,8 +252,9 @@ def main(in_dir, out_dir):
         utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
         [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]
         utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
+    print("====render animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220412_spout_vase_biggerCurveX'
-    out_dir = 'results/TestResults_20220412_spout_vase_biggerCurveX/animations'
+    in_dir = 'results/TestResults_20220419_instrument_4'
+    out_dir = 'results/TestResults_20220419_instrument_4/animations'
     main(in_dir, out_dir)
