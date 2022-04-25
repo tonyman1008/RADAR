@@ -23,13 +23,14 @@ class Trainer():
         self.archive_code = cfgs.get('archive_code', True)
         self.checkpoint_name = cfgs.get('checkpoint_name', None)
         self.test_result_dir = cfgs.get('test_result_dir', None)
+        self.load_obj = cfgs.get('load_obj', False)
         self.cfgs = cfgs
 
         self.metrics_trace = meters.MetricsTrace()
         self.make_metrics = lambda m=None: meters.StandardMetrics(m)
         self.model = model(cfgs)
         self.model.trainer = self
-        self.train_loader, self.val_loader, self.test_loader = get_data_loaders(cfgs)
+        self.train_loader, self.val_loader, self.test_loader = get_data_loaders(cfgs,False)
 
     def load_checkpoint(self, optim=True):
         """Search the specified/latest checkpoint in checkpoint_dir and load the model and optimizer."""
@@ -146,7 +147,10 @@ class Trainer():
                 m = self.model.forward(input)
                 self.model.backward()
             elif is_test:
-                m = self.model.forward_test(input)
+                if self.load_obj:
+                    m = self.model.forward_with_obj(input)
+                else:
+                    m = self.model.forward(input)
                 self.model.save_results(self.test_result_dir)
 
             metrics.update(m, self.batch_size)

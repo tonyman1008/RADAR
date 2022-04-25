@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 from PIL import Image
 
-def get_data_loaders(cfgs):
+def get_data_loaders(cfgs,origin_method=False):
     batch_size = cfgs.get('batch_size', 64)
     num_workers = cfgs.get('num_workers', 4)
     image_size = cfgs.get('image_size', 64)
@@ -256,11 +256,6 @@ class ImageAndObjDataset(torch.utils.data.Dataset):
         hflip = not self.is_validation and np.random.rand()>0.5
         img = self.transform(img, hflip=hflip)
 
-        # load obj
-        # vertices, faces = nr.load_obj(
-        # path_objs,normalization=False, load_texture=False, texture_size=8)
-        # print("vertices",vertices)
-        # print("faces",faces)
         return img, path_objs
 
     def __len__(self):

@@ -50,8 +50,7 @@ class Derenderer():
         self.lam_GAN = cfgs.get('lam_GAN', 0)
         self.sample_patch_size = cfgs.get('sample_patch_size', 64)
 
-        ##TODO: custom parameter
-        self.in_dir = cfgs.get('test_data_dir',None) ## Testing
+        # custom parameter
         self.load_obj = cfgs.get('load_obj',False)
 
         print("====model initialize====")
@@ -278,13 +277,6 @@ class Derenderer():
         self.diffuse_mean = self.diffuse[:,:,:,wcrop_sor:self.sor_circum//2-wcrop_sor].reshape(b,-1).mean(1)
         self.loss_diffuse_reg = (((self.diffuse_mean - self.diffuse_reg_mean).abs() -self.diffuse_reg_margin).clamp(min=0.) **2).mean()
 
-        ## total loss
-        # print("loss mask",self.loss_mask)
-        # print("loss mask dt",self.loss_mask_dt)
-        # print("loss iamge",self.loss_im)
-        # print("loss mean albedo",self.loss_mean_albedo_im)
-        # print("loss diffuse reg",self.loss_diffuse_reg)
-
         self.loss_total = self.lam_mask*self.loss_mask + self.lam_mask_dt*self.loss_mask_dt + self.lam_im*self.loss_im + self.lam_mean_albedo_im*self.loss_mean_albedo_im + self.lam_diffuse_reg*self.loss_diffuse_reg
         metrics = {'loss': self.loss_total}
 
@@ -296,8 +288,8 @@ class Derenderer():
 
         return metrics
 
-    def forward_test(self, input):
-        print("====forward_test====")
+    def forward_with_obj(self, input):
+        print("====forward_with_obj====")
         if isinstance(input, tuple) or isinstance(input, list):
             if self.load_obj:
                 input_im, path_obj = input
@@ -318,16 +310,17 @@ class Derenderer():
         self.mask_gt = mask_gt.to(self.device)
         self.mask_gt_dt = mask_gt_dt.to(self.device)
 
-
-        self.vertices_obj = vertices_obj.to(self.device)
-        self.faces_obj = faces_obj.to(self.device)
         b, c, h, w = self.input_im.shape
 
-        print("batch",b)
-        print("vertices_obj shape",vertices_obj.shape)
-        print("faces_obj shape",faces_obj.shape)
+        if self.load_obj:
+            self.vertices_obj = vertices_obj.to(self.device)
+            self.faces_obj = faces_obj.to(self.device)
+            print("vertices_obj shape",vertices_obj.shape)
+            print("faces_obj shape",faces_obj.shape)
 
-        ##TODO: reset the initial radcol_height and sor_faces
+        print("batch",b)
+
+        # reset the initial radcol_height and sor_faces
         if self.load_obj == True:
             self.radcol_height = self.vertices_obj.shape[0]//self.sor_circum
             self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum).to(self.device)  # 2x(H-1)xWx3
@@ -500,7 +493,7 @@ class Derenderer():
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         tex_im_replicated = rendering.compose_shading(albedo_replicated, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
 
-        ##origin save reuslt
+        # origin save reuslt
         self.depth_rendered = self.renderer.render_depth(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
         self.normal_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
         self.im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
@@ -511,6 +504,14 @@ class Derenderer():
         self.specular_map = (self.specular *self.spec_albedo *1.5).clamp(0, 1).repeat(1,3,1,1)
         self.specular_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
         
+        # save result with custom object
+        # if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
+        #     self.specular_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
+        #     self.diffuse_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
+        #     self.im_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        #     self.albedo_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+
+
         def save_images(im, suffix):
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)
         def save_txt(data, suffix):
@@ -554,6 +555,11 @@ class Derenderer():
         if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
             save_obj(self.vertices_obj,self.faces_obj,'obj_parsed')
             save_obj(self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3),'obj_straight_axis')
+
+            # save_images(self.im_rendered_origin_shape, 'im_rendered_origin_shape')
+            # save_images(self.specular_rendered_origin_shape, 'specular_rendered_origin_shape')
+            # save_images(self.diffuse_rendered_origin_shape, 'diffuse_rendered_origin_shape')
+            # save_images(self.albedo_rendered_origin_shape, 'albedo_rendered_origin_shape')
 
     def save_scores(self, path):
         pass
