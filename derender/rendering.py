@@ -291,12 +291,11 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
     K = K.unsqueeze(0)
     renderer = nr.Renderer(camera_mode='projection',
                             light_intensity_ambient=1.0,
-                            light_intensity_directional=0.,
+                            light_intensity_directional=0,
                             K=K, R=R, t=t,
                             near=renderer_min_depth, far=renderer_max_depth,
                             image_size=image_size, orig_size=image_size,
                             fill_back=fill_back,
-                            # background_color=[0.5,0.5,0.5])
                             background_color=[1.,1.,1.])
     return renderer
 
@@ -441,3 +440,37 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     im_rendered = render_sor(renderer, sor_vtx, sor_faces, tex_im, tx_size=tx_size, dim_inside=True).clamp(0, 1)
     mask_rendered = renderer.render_silhouettes(sor_vtx.view(b,-1,3), sor_faces.view(b,-1,3))
     return im_rendered, mask_rendered
+
+def render_object_shape(renderer,sor_vtx, sor_faces):
+    tx_size = 2
+    b, _, H_, T_, _ = sor_faces.shape
+
+    texture = torch.ones(b,H_*T_*2,tx_size,tx_size,tx_size,3).to(sor_faces.device)
+
+    sor_vtx = sor_vtx.reshape(b,-1,3)
+    sor_faces = sor_faces.reshape(b,-1,3)
+
+    # store the original parameter
+    background_color = renderer.background_color
+    light_intensity_ambient = renderer.light_intensity_ambient
+    light_intensity_directional = renderer.light_intensity_directional
+
+    # use for render object shape
+    background_color_render_shape = [0.,0.,0.]
+    light_intensity_ambient_render_shape = 0.5
+    light_intensity_directional_render_shape = 0.5
+
+    # assign new paramter to renderer
+    renderer.background_color = background_color_render_shape
+    renderer.light_intensity_ambient = light_intensity_ambient_render_shape
+    renderer.light_intensity_directional = light_intensity_directional_render_shape
+
+    # render
+    im_rendered = renderer.render_rgb(sor_vtx,sor_faces,texture)
+
+    # re-assign back
+    renderer.background_color = background_color
+    renderer.light_intensity_ambient = light_intensity_ambient
+    renderer.light_intensity_directional = light_intensity_directional
+
+    return im_rendered

@@ -120,6 +120,29 @@ def render_relight_multiObject(renderer, cam_loc, sor_vtx, sor_faces, albedo_lis
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
 
+def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
+    b = canon_sor_vtx.size(0)
+    print("====novel view animation====",)
+    s = 80 # sample number
+    rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
+    rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
+    rys = torch.linspace(0, 2*np.pi, s) # rotation y axis (pitch)
+
+    ims = []
+    for i, (rx, ry) in enumerate(zip(rxs, rys)):
+
+        ## rotate y-axis first then rotate x-axis
+        rxyz = torch.stack([rx*0, ry, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+        sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, None)
+        rxyz = torch.stack([rx*0, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+
+        ## rendering multiple objects test
+        sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
+
+        im_rendered = rendering.render_object_shape(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1)).clamp(0, 1)
+        ims += [im_rendered]
+    ims = torch.stack(ims, 1)  # BxTxCxHxW
+    return ims
 
 def main(in_dir, out_dir):
     device = 'cuda:0'
@@ -184,7 +207,6 @@ def main(in_dir, out_dir):
         vertices_size = radcol_height_list[i]*sor_circum # for indexing
         vertices_size_list.append(vertices_size)
 
-        print("sor_curve",sor_curve.shape)
         # set sor_vtx map
         canon_sor_vtx_component =  rendering.get_sor_vtx(sor_curve.repeat(batch_size,1,1), sor_circum)
         canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_component],1)
@@ -207,11 +229,9 @@ def main(in_dir, out_dir):
 
     ## get sor_faces with all component
     sor_faces = rendering.get_sor_full_face_idx_multiObject(radcol_height_list, sor_circum).to(device)  # 2x(H-1)xWx3
-    print("sor_faces",sor_faces.shape)
 
     ## normalize from NR loadObj
     vertices_obj_all_normalized = utils.normalizeObjVertices(vertices_obj_all)
-    print("vertices_obj_all_normalized",vertices_obj_all_normalized.shape)
 
     ## get sor vertices data
     for i in range(len(radcol_height_list)):
@@ -222,7 +242,6 @@ def main(in_dir, out_dir):
 
         ## concate to fit RADAR data dimension
         canon_sor_vtx_obj = torch.cat([canon_sor_vtx_obj,vertices_component_normalized],1)
-    print("canon_sor_vtx_obj",canon_sor_vtx_obj.shape)
 
     ## test for relighting
     rxyz = pose[:,:3] / 180 * np.pi # 1x3
@@ -245,17 +264,20 @@ def main(in_dir, out_dir):
     with torch.no_grad():
         if apply_origin_vertices == True :
             novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size)
+            novel_view_original_shape = render_original_shape_multiObject(renderer,canon_sor_vtx_obj,sor_faces)
         else:
             novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size)
         relightings = render_relight_multiObject(renderer, cam_loc, sor_vtx_relighting, sor_faces, albedo_replicated_list, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size)
         [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
         utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
+        [utils.save_images(out_dir, novel_view_original_shape[:,i].cpu().numpy(), suffix='novel_views_original_shape_%d'%i, sep_folder=True) for i in range(0, novel_view_original_shape.size(1), novel_view_original_shape.size(1)//10)]
+        utils.save_videos(out_dir, novel_view_original_shape.cpu().numpy(), suffix='novel_view_original_shape_videos', sep_folder=True, fps=25)
         [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]
         utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
     print("====render novel view animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220502_mic'
+    in_dir = 'results/TestResults_20220502_mic_2_test'
     out_dir = os.path.join(in_dir,'animations')
     # out_dir = 'results/TestResults_20220425_horn_1/animations'
     main(in_dir, out_dir)

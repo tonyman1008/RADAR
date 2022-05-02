@@ -505,11 +505,8 @@ class Derenderer():
         self.specular_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
         
         # save result with custom object
-        # if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
-        #     self.specular_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
-        #     self.diffuse_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), self.diffuse_map, tx_size=self.tx_size).clamp(0, 1)
-        #     self.im_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
-        #     self.albedo_rendered_origin_shape = rendering.render_sor(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1), rendering.tonemap(albedo_replicated), tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
+        if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
+            self.im_rendered_original_shape = rendering.render_object_shape(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1)).clamp(0, 1)
 
 
         def save_images(im, suffix):
@@ -550,16 +547,11 @@ class Derenderer():
         save_images(novel_view_rendered, 'novel_view_rendered')
         save_images(novel_view_mask_rendered.unsqueeze(1).repeat(1,3,1,1), 'novel_view_mask_rendered')
 
-        # novel_view_with_rendered, novel_view_mask_rendered = rendering.render_novel_view(self.renderer, self.canon_sor_vtx_obj, self.sor_faces.repeat(b,1,1,1,1), albedo_replicated, self.spec_albedo, self.spec_alpha, self.env_map)
-
         if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
             save_obj(self.vertices_obj,self.faces_obj,'obj_parsed')
             save_obj(self.canon_sor_vtx.reshape(-1,3),self.sor_faces.reshape(-1,3),'obj_straight_axis')
 
-            # save_images(self.im_rendered_origin_shape, 'im_rendered_origin_shape')
-            # save_images(self.specular_rendered_origin_shape, 'specular_rendered_origin_shape')
-            # save_images(self.diffuse_rendered_origin_shape, 'diffuse_rendered_origin_shape')
-            # save_images(self.albedo_rendered_origin_shape, 'albedo_rendered_origin_shape')
+            save_images(self.im_rendered_original_shape, 'im_rendered_original_shape')
 
     def save_scores(self, path):
         pass
