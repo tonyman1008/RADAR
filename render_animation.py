@@ -38,7 +38,7 @@ def load_obj(flist):
 
 def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size):
     b = canon_sor_vtx.size(0)
-    print("====render_views====",)
+    print("====novel view animation====",)
     s = 80 # sample number
     rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
     rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
@@ -252,9 +252,10 @@ def main(in_dir, out_dir):
         utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
         [utils.save_images(out_dir, relightings[:,i].cpu().numpy(), suffix='relight_%d'%i, sep_folder=True) for i in range(0, relightings.size(1), relightings.size(1)//10)]
         utils.save_videos(out_dir, relightings.cpu().numpy(), suffix='relight_videos', sep_folder=True, fps=25)
-    print("====render animation finished!====")
+    print("====render novel view animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220419_instrument_4'
-    out_dir = 'results/TestResults_20220419_instrument_4/animations'
+    in_dir = 'results/TestResults_20220502_mic'
+    out_dir = os.path.join(in_dir,'animations')
+    # out_dir = 'results/TestResults_20220425_horn_1/animations'
     main(in_dir, out_dir)
