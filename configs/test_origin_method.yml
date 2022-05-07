@@ -4,18 +4,18 @@ run_test: true
 batch_size: 1
 checkpoint_dir: officialResults/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220425_origin_method_test
+test_result_dir: original_method_results/TestResults_20220505_mic
 
 ## dataloader
 image_size: 256
 load_gt_mask: false # if false => run origin method
 paired_data_dir_names: ['images', 'masks']
-test_data_dir: data/originMethod_data
+test_data_dir: original_method_data/TestData_20220505_mic
 
 ## model
 model_name: derender_vase
 radcol_height: 32
-sor_circum: 24
+sor_circum: 96
 tex_im_h: 256
 tex_im_w: 768
 min_hscale: 0.5

@@ -4,23 +4,23 @@ run_test: true
 batch_size: 1
 checkpoint_dir: officialResults/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220411_teapot_3
+test_result_dir: results/TestResults_20220506_spout_vase_smooth_subdivision_tx_32
 
 ## dataloader
 image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_data_dir: data/TestData_20220411_teapot_3
+test_data_dir: data/TestData_20220506_spout_vase_smooth_subdivision_tx_32
 
 ## parameter
-load_obj: true
+load_obj: true # if false => run original method
 images_obj_dnames: ['images','objs']
 
 ## model
 model_name: derender_vase
-# radcol_height: 39 #TODO: multiOjbect
-sor_circum: 24
+radcol_height: 32 
+sor_circum: 48
 tex_im_h: 256
 tex_im_w: 768
 min_hscale: 0.5
@@ -50,4 +50,4 @@ lam_GAN: 0.01
 ## renderer
 fov: 10  # in degrees
 ori_z: 12.5
-tx_size: 8  # 4, 8
+tx_size: 16  # 4, 8, 16

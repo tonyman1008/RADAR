@@ -1,12 +1,8 @@
-from pickle import NONE
 import neural_renderer as nr
 import os
-from skimage.io import imsave
 import torch
-import math
 from derender import utils, rendering
 import numpy as np
-import sys
 import trimesh
 
 def sampleView(objFolder, objIndex):
@@ -18,43 +14,111 @@ def sampleView(objFolder, objIndex):
     ori_z = 12.5
     world_ori=[0,0,ori_z] ## make sure the camera pose is the same
     sor_circum = 24
+    tx_size = 32
 
     # initial setting
     device = 'cuda:0'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     input_dir = current_dir + '/3SweepData/' + objFolder
-    test_save_dir = current_dir + '/3SweepData/' + objFolder +'/' + objIndex
     test_dataSet_dir = current_dir + '/3SweepData/' + objFolder +'/TestData/' # final test data folder
 
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
 
     # load obj
     vertices, faces, textures = nr.load_obj(
-        os.path.join(input_dir, objIndex+'.obj'),normalization=False, load_texture=True, texture_size=8)
+        os.path.join(input_dir, objIndex+'.obj'),normalization=False, load_texture=True, texture_size=tx_size)
 
     # parse the object data
     radcol_height = vertices.shape[0] // sor_circum
     vertices, faces, textures = parse3SweepObjData(radcol_height,sor_circum,vertices,faces,textures)
 
-    vertices, faces = taubin_smooth_trimesh(vertices,faces,device)
+    vertices_subdivision, faces_subdivision = subdivide(vertices,sor_circum)
 
+    vertices_subdivision, faces_subdivision = taubin_smooth_trimesh(vertices_subdivision,faces_subdivision,device)
+    
     # sample front view with straight axis object
     sor_curve = rendering.get_straight_sor_curve(radcol_height,device)
     canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum) # BxHxTx3
     images = renderer.render_rgb(canon_sor_vtx.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
 
-    # save debug data
-    # utils.save_obj(test_save_dir,vertices,faces,suffix='obj_parsed',sep_folder=True)
-    # utils.save_images(test_save_dir, images.detach().cpu().numpy(), suffix='sample_view', sep_folder=True)
+    # ## save the final data
+    utils.save_images_objs_pair_data(test_dataSet_dir,images.detach().cpu().numpy(),vertices_subdivision,faces_subdivision,objIndex)
 
-    ## save the final data
-    utils.save_images_objs_pair_data(test_dataSet_dir,images.detach().cpu().numpy(),vertices,faces,objIndex)
+    print("====Sample view component "+ objIndex +" finished ====")
 
-    print("====Sample view component "+ objIndex +" ====")
+def sample3SweepOriginalFullView(objFolder):
+    print("====Start sample 3sweep full view  ====")
 
+    ## same camera parameter with RADAR
+    image_size = 256
+    fov = 10
+    ori_z = 12.5
+    world_ori=[0,0,ori_z] ## make sure the camera pose is the same
+    tx_size = 16
+
+    # initial setting
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    input_dir = current_dir + '/3SweepData/' + objFolder
+    test_dataSet_dir = current_dir + '/3SweepData/' + objFolder  # final test data folder
+
+    renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
+
+    # load obj with normalization
+    vertices, faces, textures = nr.load_obj(
+        os.path.join(input_dir, 'full.obj'),normalization=True, load_texture=True, texture_size=tx_size)
+
+    vertices[:,1:]*=-1
+
+    images = renderer.render_rgb(vertices.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
+    utils.save_images(test_dataSet_dir, images.detach().cpu().numpy(), suffix='3Sweep_view', sep_folder=True)
+    print("====Sample 3sweep full view finished ====")
+
+
+## one to four subdivision
+def subdivide(vertices,sor_circum):
+
+    rad_height = vertices.shape[0] // sor_circum
+    new_sor_cirum = sor_circum * 2
+    new_rad_height = rad_height * 2 -1
+
+    vertices = vertices.reshape(rad_height,sor_circum,3)
+
+    # subdivide vertices
+    new_vertices = torch.tensor([]).to(vertices.device)
+    for i in range(rad_height):
+
+        # original row (append index)
+        for j in range(sor_circum):
+            next_point_index = 0 if j== sor_circum-1 else j+1
+            mid_point = (vertices[i,j,:] + vertices[i,next_point_index,:]) * 0.5
+            # 2 element for a set
+            set = torch.stack([vertices[i,j,:],mid_point],0).to(vertices.device)
+            new_vertices = torch.cat([new_vertices,set],0)
+        
+        # middle row (between row and row)
+        if i != rad_height-1:
+            
+            for k in range(sor_circum):
+                left_point = (vertices[i,k,:] + vertices[i+1,k,:]) * 0.5
+                next_point_index = 0 if k == sor_circum-1 else k+1
+                right_point = (vertices[i,next_point_index,:] + vertices[i+1,next_point_index,:]) * 0.5
+                mid_point = (left_point + right_point) *0.5
+                # 3 element for a set
+                set = torch.stack([left_point,mid_point],0)
+                new_vertices = torch.cat([new_vertices,set],0)
+
+    ## get new faces indexing
+    new_faces = rendering.get_sor_full_face_idx(new_rad_height,new_sor_cirum)
+    new_vertices = new_vertices.reshape(-1,3)
+    new_faces = new_faces.reshape(-1,3)
+
+    return new_vertices,new_faces
+
+
+## taubin smooth using trimesh library
 def taubin_smooth_trimesh(vertices,faces,device):
 
-    lamb = 0.5
+    lamb = 0.5 
     nu = 0.5
     iters = 5
 
@@ -130,10 +194,15 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 
     return new_sor_vtx,newFaces,textures
 
+
 if __name__ == '__main__':
-    objFolder = 'TestData_20220502/mic_2/'
+    objFolder = 'TestData_20220502/mic'
     objNum = 1
     for i in range(objNum):
         indexStr = str(i +1)
         sampleView(objFolder, indexStr)
+
+    # sample original view from 3sweep
+    sample3SweepOriginalFullView(objFolder)
+
     print("====Sample View Complete !!! =====")

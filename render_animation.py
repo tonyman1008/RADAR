@@ -38,7 +38,7 @@ def load_obj(flist):
 
 def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size):
     b = canon_sor_vtx.size(0)
-    print("====novel view animation====",)
+    print("====render novel view animation====",)
     s = 80 # sample number
     rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
     rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
@@ -64,10 +64,6 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
             diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
             tex_im = rendering.compose_shading(albedo_list[j], diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
             tex_im_list.append(tex_im)
-            # print("sor_vtx_map",sor_vtx_map.shape)
-            # print("normal_map",normal_map.shape)
-            # print("diffuse",diffuse.shape)
-            # print("specular",specular.shape)
 
         im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size, dim_inside=False).clamp(0, 1)
         ims += [im_rendered]
@@ -122,7 +118,6 @@ def render_relight_multiObject(renderer, cam_loc, sor_vtx, sor_faces, albedo_lis
 
 def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
     b = canon_sor_vtx.size(0)
-    print("====novel view animation====",)
     s = 80 # sample number
     rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
     rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
@@ -148,7 +143,7 @@ def main(in_dir, out_dir):
     device = 'cuda:0'
 
     # set sor_circum to 24 fit 3sweep object
-    sor_circum = 24 
+    sor_circum = 48 
 
     image_size = 256
     tex_im_h = 256
@@ -158,7 +153,7 @@ def main(in_dir, out_dir):
     fov = 10  # in degrees
     ori_z = 12.5 # camera z-axis orientation
     world_ori = [0,0,ori_z]
-    tx_size = 8
+    tx_size = 16
     cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
 
     apply_origin_vertices = True
@@ -277,7 +272,7 @@ def main(in_dir, out_dir):
     print("====render novel view animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220502_mic_2_test'
+    in_dir = 'results/TestResults_20220506_spout_vase_smooth_subdivision_tx_32'
     out_dir = os.path.join(in_dir,'animations')
     # out_dir = 'results/TestResults_20220425_horn_1/animations'
     main(in_dir, out_dir)
