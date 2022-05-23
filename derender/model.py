@@ -295,11 +295,9 @@ class Derenderer():
                 input_im, path_obj = input
                 mask_gt = input_im[:,0,:,:] *0+1
                 mask_gt_dt = input_im[:,0,:,:] *0
-                print("path obj",path_obj)
                 vertices_obj, faces_obj = nr.load_obj(path_obj[0],normalization=False, load_texture=False, texture_size=8)
             else:
                 input_im, mask_gt, mask_gt_dt = input
-                print("input",input)
                 mask_gt = mask_gt[:,0,:,:]
                 mask_gt_dt = mask_gt_dt / self.image_size
         else:
@@ -315,24 +313,17 @@ class Derenderer():
         if self.load_obj:
             self.vertices_obj = vertices_obj.to(self.device)
             self.faces_obj = faces_obj.to(self.device)
-            print("vertices_obj shape",vertices_obj.shape)
-            print("faces_obj shape",faces_obj.shape)
 
-        print("batch",b)
-
-        # reset the initial radcol_height and sor_faces
+        ## reset the initial radcol_height and sor_faces
         if self.load_obj == True:
             self.radcol_height = self.vertices_obj.shape[0]//self.sor_circum
             self.sor_faces = rendering.get_sor_full_face_idx(self.radcol_height, self.sor_circum).to(self.device)  # 2x(H-1)xWx3
-            print("radcol_height",self.radcol_height)
-            print("sor_faces shape",self.sor_faces.shape)
 
         ## get custom sor_curve straight axis
         self.sor_curve = rendering.get_straight_sor_curve(self.radcol_height,self.device)
         self.canon_sor_vtx = rendering.get_sor_vtx(self.sor_curve, self.sor_circum) # BxHxTx3
-        print("canon_sor_vtx",self.canon_sor_vtx.shape)
 
-        ##TODO: Camera pose for render animation
+        ## set camera pose to zero 
         self.rxyz = torch.zeros(1,3)
         self.txy = torch.zeros(1,2)
 
@@ -493,7 +484,7 @@ class Derenderer():
         albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         tex_im_replicated = rendering.compose_shading(albedo_replicated, self.diffuse, self.spec_albedo, self.specular).clamp(0,1)
 
-        # origin save reuslt
+        ## origin save reuslt
         self.depth_rendered = self.renderer.render_depth(self.sor_vtx.view(b,-1,3), self.sor_faces.view(1,-1,3).repeat(b,1,1)).clamp(self.min_depth, self.max_depth)
         self.normal_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.normal_map.permute(0,3,1,2), tx_size=self.tx_size, render_normal=True).clamp(0, 1)
         self.im_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), tex_im_replicated, tx_size=self.tx_size, dim_inside=True).clamp(0, 1)
@@ -504,10 +495,9 @@ class Derenderer():
         self.specular_map = (self.specular *self.spec_albedo *1.5).clamp(0, 1).repeat(1,3,1,1)
         self.specular_rendered = rendering.render_sor(self.renderer, self.sor_vtx, self.sor_faces.repeat(b,1,1,1,1), self.specular_map, tx_size=self.tx_size).clamp(0, 1)
         
-        # save result with custom object
+        ## save result with custom object
         if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
             self.im_rendered_original_shape = rendering.render_object_shape(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1)).clamp(0, 1)
-
 
         def save_images(im, suffix):
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)

@@ -36,7 +36,7 @@ def load_obj(flist):
         faces_all = torch.cat([faces_all,faces],0)
     return vertices_all,faces_all
 
-def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size):
+def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_list, env_map_all, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size):
     b = canon_sor_vtx.size(0)
     print("====render novel view animation====",)
     s = 80 # sample number
@@ -55,8 +55,12 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
         ## rendering multiple objects test
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
 
+        ## render each components texture
         tex_im_list = []
         for j in range(len(radcol_height_list)):
+            env_map = env_map_all[j:j+1].to(canon_sor_vtx.device)
+            spec_alpha = spec_alpha_list[j]
+            spec_albedo = spec_albedo_list[j]
             h_start = sum(radcol_height_list[:j])
             h_end = sum(radcol_height_list[:j+1])
             sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,h_start:h_end,:,:])  # Bx(H-1)xTx3
@@ -65,6 +69,7 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
             tex_im = rendering.compose_shading(albedo_list[j], diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
             tex_im_list.append(tex_im)
 
+        ## render each components reconstrction image
         im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size, dim_inside=False).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
@@ -97,12 +102,10 @@ def render_relight_multiObject(renderer, cam_loc, sor_vtx, sor_faces, albedo_lis
         env_map_ambient = torch.FloatTensor([env_amb]).repeat(b).to(sor_vtx.device)
         env_map = env_map + env_map_ambient.view(b,1,1)
 
-        # TODO: test use sample spec_alpha spec_albedo
-        spec_alpha = spec_alpha_list[0]
-        spec_albedo = spec_albedo_list[0]
-
         tex_im_list = []
         for j in range(len(radcol_height_list)):
+            spec_alpha = spec_alpha_list[j]
+            spec_albedo = spec_albedo_list[j]
             h_start = sum(radcol_height_list[:j])
             h_end = sum(radcol_height_list[:j+1])
             sor_vtx_map = rendering.get_sor_quad_center_vtx(sor_vtx[:,h_start:h_end,:,:])  # Bx(H-1)xTx3
@@ -142,9 +145,7 @@ def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
 def main(in_dir, out_dir):
     device = 'cuda:0'
 
-    # set sor_circum to 24 fit 3sweep object
-    sor_circum = 48 
-
+    sor_circum = 48 # set sor_circum to 48 fit 3sweep object(after subdivision)
     image_size = 256
     tex_im_h = 256
     tex_im_w = 768 ## 256*3 => 3 times width of texture
@@ -152,28 +153,28 @@ def main(in_dir, out_dir):
     env_map_w = 48
     fov = 10  # in degrees
     ori_z = 12.5 # camera z-axis orientation
-    world_ori = [0,0,ori_z]
-    tx_size = 16
+    world_ori = [0,0,ori_z] 
+    tx_size = 16 # texture sample grid size (Neural renderer)
     cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
 
-    apply_origin_vertices = True
-    batch_size = 1 # for multiObject fix 1
+    apply_origin_vertices = True # apply the origin vertices from 3-Sweep
+    batch_size = 1 # for multiObject, so fix 1
 
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True, device='cuda:0')
     
-    # data type: sor_curve_all => tensor, radcol_height_list => list
+    ## load sor,rad_height. (data type: sor_curve_all => tensor, radcol_height_list => list)
     sor_curve_all,radcol_height_list = load_sor_curve_txt(sorted(glob(os.path.join(in_dir, 'sor_curve/*_sor_curve.txt'), recursive=True)))
+
+    ## load data (tensor type)
     material_all = load_txts(sorted(glob(os.path.join(in_dir, 'material/*_material.txt'), recursive=True)))
     pose_all = load_txts(sorted(glob(os.path.join(in_dir, 'pose/*_pose.txt'), recursive=True)))
     albedo_all = load_imgs(sorted(glob(os.path.join(in_dir, 'albedo_map/*_albedo_map.png'), recursive=True)))
     mask_gt_all = load_imgs(sorted(glob(os.path.join(in_dir, 'mask_gt/*_mask_gt.png'), recursive=True)))
     env_map_all = load_imgs(sorted(glob(os.path.join(in_dir, 'env_map/*_env_map.png'), recursive=True)))[:,0,:,:]
-
-    ## list
     vertices_obj_all,faces_obj_all = load_obj(sorted(glob(os.path.join(in_dir, 'obj_parsed/*_obj_parsed.obj'), recursive=True)))
 
     component_num = len(radcol_height_list)
-    print("component_num",component_num)
+    print("total components num of this object",component_num)
 
     vertices_size_list = []
     spec_alpha_list = []
@@ -183,17 +184,17 @@ def main(in_dir, out_dir):
     canon_sor_vtx = torch.empty(0).to(device)
     canon_sor_vtx_obj = torch.empty(0).to(device)
 
-    ##TODO: test only use the same env_map,mask,pose for full object
-    env_map = env_map_all[:1].to(device)
     mask_gt = mask_gt_all[:1].to(device)
     pose = pose_all[:1].to(device) # => 0,0,0
     
     ## set multi-object data list
     for i in range(0, component_num):
         
+        ## set the index of components tensor
         index_start = sum(radcol_height_list[:i])
         index_end = sum(radcol_height_list[:i+1])
 
+        ## get different sor,material,albedo of each components
         sor_curve = sor_curve_all[index_start:index_end].to(device)
         material = material_all[i:i+1].to(device)
         albedo = albedo_all[i:i+1].to(device)
@@ -202,7 +203,7 @@ def main(in_dir, out_dir):
         vertices_size = radcol_height_list[i]*sor_circum # for indexing
         vertices_size_list.append(vertices_size)
 
-        # set sor_vtx map
+        ## set sor_vtx map
         canon_sor_vtx_component =  rendering.get_sor_vtx(sor_curve.repeat(batch_size,1,1), sor_circum)
         canon_sor_vtx = torch.cat([canon_sor_vtx,canon_sor_vtx_component],1)
 
@@ -244,24 +245,18 @@ def main(in_dir, out_dir):
     tz = torch.zeros(len(txy), 1).to(txy.device) ## set z-transform to zero
     txyz = torch.cat([txy, tz], 1)
     
+    ## apply the original vertices for relighting
     if apply_origin_vertices == True:
         sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_obj, rxyz, txyz)
     else:
         sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
 
-    # sor_vtx_map_relighting = rendering.get_sor_quad_center_vtx(sor_vtx_relighting)  # Bx(H-1)xTx3
-    # normal_map_relighting = rendering.get_sor_quad_center_normal(sor_vtx_relighting)  # Bx(H-1)xTx3
-    
-    ##TODO: test only use the same env_map
-    spec_alpha = spec_alpha_list[0]
-    spec_albedo = spec_albedo_list[0]
-
     with torch.no_grad():
         if apply_origin_vertices == True :
-            novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size)
+            novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated_list, env_map_all, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size)
             novel_view_original_shape = render_original_shape_multiObject(renderer,canon_sor_vtx_obj,sor_faces)
         else:
-            novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated_list, env_map, spec_alpha, spec_albedo,radcol_height_list, tx_size)
+            novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_replicated_list, env_map_all, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size)
         relightings = render_relight_multiObject(renderer, cam_loc, sor_vtx_relighting, sor_faces, albedo_replicated_list, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size)
         [utils.save_images(out_dir, novel_views[:,i].cpu().numpy(), suffix='novel_views_%d'%i, sep_folder=True) for i in range(0, novel_views.size(1), novel_views.size(1)//10)]
         utils.save_videos(out_dir, novel_views.cpu().numpy(), suffix='novel_view_videos', sep_folder=True, fps=25)
@@ -272,7 +267,7 @@ def main(in_dir, out_dir):
     print("====render novel view animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220506_spout_vase_smooth_subdivision_tx_32'
-    out_dir = os.path.join(in_dir,'animations')
+    in_dir = 'results/TestResults_20220508_ADA6051'
+    out_dir = os.path.join(in_dir,'animations_diff_lightParameters')
     # out_dir = 'results/TestResults_20220425_horn_1/animations'
     main(in_dir, out_dir)

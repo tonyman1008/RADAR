@@ -16,7 +16,7 @@ def sampleView(objFolder, objIndex):
     sor_circum = 24
     tx_size = 32
 
-    # initial setting
+    ## initial setting
     device = 'cuda:0'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     input_dir = current_dir + '/3SweepData/' + objFolder
@@ -24,19 +24,21 @@ def sampleView(objFolder, objIndex):
 
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
 
-    # load obj
+    ## load obj
     vertices, faces, textures = nr.load_obj(
         os.path.join(input_dir, objIndex+'.obj'),normalization=False, load_texture=True, texture_size=tx_size)
 
-    # parse the object data
+    ## parse the object data
     radcol_height = vertices.shape[0] // sor_circum
     vertices, faces, textures = parse3SweepObjData(radcol_height,sor_circum,vertices,faces,textures)
 
+    ## mid-point subdivision
     vertices_subdivision, faces_subdivision = subdivide(vertices,sor_circum)
 
+    ## taubin smoothing
     vertices_subdivision, faces_subdivision = taubin_smooth_trimesh(vertices_subdivision,faces_subdivision,device)
     
-    # sample front view with straight axis object
+    ## sample front view with straight axis object
     sor_curve = rendering.get_straight_sor_curve(radcol_height,device)
     canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum) # BxHxTx3
     images = renderer.render_rgb(canon_sor_vtx.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
@@ -53,17 +55,17 @@ def sample3SweepOriginalFullView(objFolder):
     image_size = 256
     fov = 10
     ori_z = 12.5
-    world_ori=[0,0,ori_z] ## make sure the camera pose is the same
+    world_ori=[0,0,ori_z] # make sure the camera pose is the same
     tx_size = 16
 
-    # initial setting
+    ## initial setting
     current_dir = os.path.dirname(os.path.realpath(__file__))
     input_dir = current_dir + '/3SweepData/' + objFolder
     test_dataSet_dir = current_dir + '/3SweepData/' + objFolder  # final test data folder
 
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
 
-    # load obj with normalization
+    ## load obj with normalization
     vertices, faces, textures = nr.load_obj(
         os.path.join(input_dir, 'full.obj'),normalization=True, load_texture=True, texture_size=tx_size)
 
@@ -83,11 +85,11 @@ def subdivide(vertices,sor_circum):
 
     vertices = vertices.reshape(rad_height,sor_circum,3)
 
-    # subdivide vertices
+    ## subdivide vertices
     new_vertices = torch.tensor([]).to(vertices.device)
     for i in range(rad_height):
 
-        # original row (append index)
+        ## original row (append index)
         for j in range(sor_circum):
             next_point_index = 0 if j== sor_circum-1 else j+1
             mid_point = (vertices[i,j,:] + vertices[i,next_point_index,:]) * 0.5
@@ -95,7 +97,7 @@ def subdivide(vertices,sor_circum):
             set = torch.stack([vertices[i,j,:],mid_point],0).to(vertices.device)
             new_vertices = torch.cat([new_vertices,set],0)
         
-        # middle row (between row and row)
+        ## middle row (between row and row)
         if i != rad_height-1:
             
             for k in range(sor_circum):
@@ -123,12 +125,12 @@ def taubin_smooth_trimesh(vertices,faces,device):
     iters = 5
 
     if torch.is_tensor(vertices) and torch.is_tensor(faces):
-        # tensor type
+        ## tensor type
         original_mesh = trimesh.Trimesh(vertices=vertices.cpu().numpy(),faces=faces.cpu().numpy())
         smooth_mesh = trimesh.smoothing.filter_taubin(original_mesh, lamb=lamb, nu=nu, iterations=iters, laplacian_operator=None)
         return torch.tensor(smooth_mesh.vertices).to(device), torch.tensor(smooth_mesh.faces).to(device)
     else:
-        # numpy type
+        ## numpy type
         original_mesh = trimesh.Trimesh(vertices=vertices,faces=faces)
         smooth_mesh = trimesh.smoothing.filter_taubin(original_mesh, lamb=lamb, nu=nu, iterations=iters, laplacian_operator=None)
         return smooth_mesh.vertices, smooth_mesh.faces
@@ -157,7 +159,7 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
         new_sor_vtx[0:24] = vertices[0:24]
         new_sor_vtx[-24:] = vertices[24:48]
 
-        # indexing start offset
+        ## indexing start offset
         initialIndexOffset = get_vtx_indexing_offset(new_sor_vtx)
 
         ## roll the circum vertices to fit RADAR initial indexing position
@@ -165,7 +167,7 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
         new_sor_vtx = torch.roll(new_sor_vtx,initialIndexOffset,2)
         new_sor_vtx = new_sor_vtx.reshape(-1,3)
 
-        ## coordinate system, y & z is opposite
+        ## coordinate system, y & z is opposite (fit RADAR coordinate system)
         new_sor_vtx[:,1:]*=-1
 
      ## Face
@@ -196,13 +198,12 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 
 
 if __name__ == '__main__':
-    objFolder = 'TestData_20220502/mic'
-    objNum = 1
+    objFolder = 'TestData_20220418/instrument_3'
+    objNum = 2
     for i in range(objNum):
         indexStr = str(i +1)
         sampleView(objFolder, indexStr)
 
     # sample original view from 3sweep
-    sample3SweepOriginalFullView(objFolder)
-
+    # sample3SweepOriginalFullView(objFolder)
     print("====Sample View Complete !!! =====")
