@@ -248,6 +248,8 @@ def get_patches(im, num_patch=8, patch_size=64, scale=(0.25,0.5)):
 
 
 def normalizeObjVertices(vertices):
+    # the vertice shape need to be N*3, N is the vertices number, 3 is xyz
+    vertices = vertices.reshape(-1,3)
     vertices -= vertices.min(0)[0][None, :]
     vertices /= torch.abs(vertices).max()
     vertices *= 2
