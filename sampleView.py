@@ -32,11 +32,12 @@ def sampleView(objFolder, objIndex):
     radcol_height = vertices.shape[0] // sor_circum
     vertices, faces, textures = parse3SweepObjData(radcol_height,sor_circum,vertices,faces,textures)
 
-    ## mid-point subdivision
-    vertices_subdivision, faces_subdivision = subdivide(vertices,sor_circum)
-
     ## taubin smoothing
-    vertices_subdivision, faces_subdivision = taubin_smooth_trimesh(vertices_subdivision,faces_subdivision,device)
+    vertices_smooth, face_smooth = taubin_smooth_trimesh(vertices,faces,device)
+
+    ## mid-point subdivision
+    vertices_subdivision, faces_subdivision = subdivide(vertices_smooth,sor_circum)
+
     
     ## sample front view with straight axis object
     sor_curve = rendering.get_straight_sor_curve(radcol_height,device)
@@ -121,14 +122,15 @@ def subdivide(vertices,sor_circum):
 def taubin_smooth_trimesh(vertices,faces,device):
 
     lamb = 0.5 
-    nu = 0.5
+    mu = -0.5
+    nu = mu*-1 ## trimesh's taubin smooth nu is the opposite of mu
     iters = 5
 
     if torch.is_tensor(vertices) and torch.is_tensor(faces):
         ## tensor type
         original_mesh = trimesh.Trimesh(vertices=vertices.cpu().numpy(),faces=faces.cpu().numpy())
         smooth_mesh = trimesh.smoothing.filter_taubin(original_mesh, lamb=lamb, nu=nu, iterations=iters, laplacian_operator=None)
-        return torch.tensor(smooth_mesh.vertices).to(device), torch.tensor(smooth_mesh.faces).to(device)
+        return torch.FloatTensor(smooth_mesh.vertices).to(device), torch.FloatTensor(smooth_mesh.faces).to(device)
     else:
         ## numpy type
         original_mesh = trimesh.Trimesh(vertices=vertices,faces=faces)
@@ -198,12 +200,13 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 
 
 if __name__ == '__main__':
-    objFolder = 'TestData_20220418/instrument_3'
-    objNum = 2
+    objFolder = 'TestData_20220523/L_2009_22_201'
+    objNum = 3
     for i in range(objNum):
         indexStr = str(i +1)
         sampleView(objFolder, indexStr)
 
-    # sample original view from 3sweep
+    ## sample original view from 3sweep
     # sample3SweepOriginalFullView(objFolder)
+
     print("====Sample View Complete !!! =====")

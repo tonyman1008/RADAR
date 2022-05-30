@@ -497,7 +497,7 @@ class Derenderer():
         
         ## save result with custom object
         if self.load_obj and self.vertices_obj != None and self.faces_obj != None:
-            self.im_rendered_original_shape = rendering.render_object_shape(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1)).clamp(0, 1)
+            self.im_rendered_original_shape = rendering.render_object_shape(self.renderer, self.vertices_obj.reshape(b,self.radcol_height,-1,3), self.faces_obj.reshape(2,self.radcol_height-1,-1,3).repeat(b,1,1,1,1),True).clamp(0, 1)
 
         def save_images(im, suffix):
             utils.save_images(save_dir, im.detach().cpu().numpy(), suffix=suffix, sep_folder=True)

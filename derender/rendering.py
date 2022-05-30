@@ -441,11 +441,14 @@ def render_novel_view(renderer, canon_sor_vtx, sor_faces, albedo, spec_albedo, s
     mask_rendered = renderer.render_silhouettes(sor_vtx.view(b,-1,3), sor_faces.view(b,-1,3))
     return im_rendered, mask_rendered
 
-def render_object_shape(renderer,sor_vtx, sor_faces):
+def render_object_shape(renderer,sor_vtx, sor_faces,normalize=True):
     tx_size = 2
     b, _, H_, T_, _ = sor_faces.shape
 
     texture = torch.ones(b,H_*T_*2,tx_size,tx_size,tx_size,3).to(sor_faces.device)
+
+    if normalize == True:
+        sor_vtx = normalizeObjVertices(sor_vtx)
 
     sor_vtx = sor_vtx.reshape(b,-1,3)
     sor_faces = sor_faces.reshape(b,-1,3)

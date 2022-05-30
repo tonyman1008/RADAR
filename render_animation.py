@@ -137,7 +137,7 @@ def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
         ## rendering multiple objects test
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
 
-        im_rendered = rendering.render_object_shape(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1)).clamp(0, 1)
+        im_rendered = rendering.render_object_shape(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),True).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
@@ -267,7 +267,16 @@ def main(in_dir, out_dir):
     print("====render novel view animation finished!====")
 
 if __name__ == '__main__':
-    in_dir = 'results/TestResults_20220508_ADA6051'
-    out_dir = os.path.join(in_dir,'animations_diff_lightParameters')
+
+    ## auto batch test
+    for in_dir in glob('results/TestResults_20220524*'):
+        print("===Run data dir: "+in_dir+" ===")
+        out_dir = os.path.join(in_dir,'animations')
+        main(in_dir, out_dir)
+        ("===Finished data dir: "+in_dir+" ===")
+
+    ## single test
+    # in_dir = 'results/TestResults_20220508_ADA6051'
+    # out_dir = os.path.join(in_dir,'animations')
     # out_dir = 'results/TestResults_20220425_horn_1/animations'
-    main(in_dir, out_dir)
+    # main(in_dir, out_dir)

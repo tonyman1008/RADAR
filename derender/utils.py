@@ -184,7 +184,6 @@ def save_obj(out_fold, vertices_obj,faces_obj, prefix='', suffix='', sep_folder=
     prefix = prefix + '_' if prefix else ''
     suffix = '_' + suffix if suffix else ''
     offset = len(glob.glob(os.path.join(out_fold, prefix+'*'+suffix+ext))) +1
-    ##TODO: batch size?
     nr.save_obj(os.path.join(out_fold, prefix+'%05d'%(offset)+suffix+ext),vertices_obj,faces_obj) 
 
 def save_images_objs_pair_data(out_fold_root,imgs,vertices_obj,faces_obj,dataName):
@@ -195,7 +194,6 @@ def save_images_objs_pair_data(out_fold_root,imgs,vertices_obj,faces_obj,dataNam
     os.makedirs(out_fold_imgs, exist_ok=True)
     os.makedirs(out_fold_objs, exist_ok=True)
 
-    ##TODO: batch size?
     nr.save_obj(os.path.join(out_fold_objs, dataName+'.obj'),vertices_obj,faces_obj) 
 
     imgs = imgs.transpose(0,2,3,1)
