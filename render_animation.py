@@ -137,7 +137,7 @@ def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
         ## rendering multiple objects test
         sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
 
-        im_rendered = rendering.render_object_shape(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),True).clamp(0, 1)
+        im_rendered = rendering.render_object_shape(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),False).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
