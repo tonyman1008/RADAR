@@ -1,12 +1,23 @@
+from distutils import extension
 import neural_renderer as nr
 import os
 import torch
 from derender import utils, rendering
 import numpy as np
 import trimesh
+from glob import glob
+from datetime import datetime
 
-def sampleView(objFolder, objIndex):
-    print("====Start sample view component "+ objIndex +" ====")
+
+def sampleView(objPath,output_dir):
+
+    ## initial setting
+    device = 'cuda:0'
+    objName = os.path.basename(objPath).split('.')[0]
+    objRootDir = os.path.dirname(objPath)
+    objRootFolderName = os.path.basename(objRootDir)
+
+    print("==== Data folder "+ objRootFolderName +" component "+ objName + " sample view start ====")
 
     ## same camera parameter with RADAR
     image_size = 256
@@ -15,18 +26,11 @@ def sampleView(objFolder, objIndex):
     world_ori=[0,0,ori_z] ## make sure the camera pose is the same
     sor_circum = 24
     tx_size = 32
-
-    ## initial setting
-    device = 'cuda:0'
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_dir = current_dir + '/3SweepData/' + objFolder
-    test_dataSet_dir = current_dir + '/3SweepData/' + objFolder +'/TestData/' # final test data folder
-
+    
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
 
     ## load obj
-    vertices, faces, textures = nr.load_obj(
-        os.path.join(input_dir, objIndex+'.obj'),normalization=False, load_texture=True, texture_size=tx_size)
+    vertices, faces, textures = nr.load_obj(objPath,normalization=False, load_texture=True, texture_size=tx_size)
 
     ## parse the object data
     radcol_height = vertices.shape[0] // sor_circum
@@ -45,36 +49,8 @@ def sampleView(objFolder, objIndex):
     images = renderer.render_rgb(canon_sor_vtx.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
 
     # ## save the final data
-    utils.save_images_objs_pair_data(test_dataSet_dir,images.detach().cpu().numpy(),vertices_subdivision,faces_subdivision,objIndex)
-
-    print("====Sample view component "+ objIndex +" finished ====")
-
-def sample3SweepOriginalFullView(objFolder):
-    print("====Start sample 3sweep full view  ====")
-
-    ## same camera parameter with RADAR
-    image_size = 256
-    fov = 10
-    ori_z = 12.5
-    world_ori=[0,0,ori_z] # make sure the camera pose is the same
-    tx_size = 16
-
-    ## initial setting
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_dir = current_dir + '/3SweepData/' + objFolder
-    test_dataSet_dir = current_dir + '/3SweepData/' + objFolder  # final test data folder
-
-    renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
-
-    ## load obj with normalization
-    vertices, faces, textures = nr.load_obj(
-        os.path.join(input_dir, 'full.obj'),normalization=True, load_texture=True, texture_size=tx_size)
-
-    vertices[:,1:]*=-1
-
-    images = renderer.render_rgb(vertices.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
-    utils.save_images(test_dataSet_dir, images.detach().cpu().numpy(), suffix='3Sweep_view', sep_folder=True)
-    print("====Sample 3sweep full view finished ====")
+    utils.save_images_objs_pair_data(output_dir,images.detach().cpu().numpy(),vertices_subdivision,faces_subdivision,objName)
+    print("==== Data path "+ objRootFolderName +" component "+ objName + " sample view finished ====")
 
 
 ## one to four subdivision
@@ -200,13 +176,19 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 
 
 if __name__ == '__main__':
-    objFolder = 'TestData_20220523/L_2009_22_201'
-    objNum = 3
-    for i in range(objNum):
-        indexStr = str(i +1)
-        sampleView(objFolder, indexStr)
 
-    ## sample original view from 3sweep
-    # sample3SweepOriginalFullView(objFolder)
+    date = datetime.today().strftime('%Y%m%d')
+
+    rootDir = '3SweepData/TestData_Thesis_20220602'
+    outputRootDir = 'data'
+    outputFolderSuffix = 'subdivision'
+
+    for file in os.listdir(rootDir):
+        folderPath = os.path.join(rootDir,file)
+        outputFolderName= 'TestData_'+date+"_"+file+"_"+outputFolderSuffix
+        outputDir = os.path.join(outputRootDir,outputFolderName)
+        if os.path.isdir(folderPath):
+            for objPath in sorted(glob(os.path.join(folderPath,'*.obj'),recursive=True)):
+                sampleView(objPath,outputDir)
 
     print("====Sample View Complete !!! =====")
