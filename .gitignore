@@ -8,6 +8,7 @@
 *.zip
 *.pth
 /officialTestData
+/3SweepData
 *.tar
 
 
