@@ -218,7 +218,6 @@ def make_images_obj_dataset(dir, images_obj_dnames=None):
     imagesObjsPath = []
     for root, _, files in sorted(os.walk(dir_images)):
         ## traverse the os file path
-        print("files",files)
         for fname in sorted(files):
             path_image,path_obj = None,None
             if is_image_file(fname):

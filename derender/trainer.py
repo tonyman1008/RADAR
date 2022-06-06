@@ -102,14 +102,11 @@ class Trainer():
         
         if os.path.isdir(self.test_batch_data_dir_root):
             for folderName in os.listdir(self.test_batch_data_dir_root):
-                print("folderName",folderName)
-                print("test_batch_data_dir_root",self.test_batch_data_dir_root)
                 test_data_dir = os.path.join(self.test_batch_data_dir_root,folderName)
                 # rename input data to results
                 self.test_result_dir = os.path.join(self.test_result_dir_root, folderName.replace('Data','Results'))
                 # re-assign input data dir
                 self.cfgs['test_data_dir'] = test_data_dir
-                print("dirrrrr",self.cfgs.get('test_data_dir'))
                 # reload data
                 _, _, self.test_loader = get_data_loaders(self.cfgs,False)
 
