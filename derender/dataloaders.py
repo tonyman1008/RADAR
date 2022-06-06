@@ -14,6 +14,7 @@ def get_data_loaders(cfgs,origin_method=False):
     run_train = cfgs.get('run_train', False)
     train_val_data_dir = cfgs.get('train_val_data_dir', './data')
     run_test = cfgs.get('run_test', False)
+    run_batch_test = cfgs.get('run_batch_test', False)
     test_data_dir = cfgs.get('test_data_dir', './data/test')
 
     load_gt_mask = cfgs.get('load_gt_mask', False)
@@ -42,6 +43,10 @@ def get_data_loaders(cfgs,origin_method=False):
         print(f"Loading validation data from {val_data_dir}")
         val_loader = get_loader(data_dir=val_data_dir, is_validation=True)
     if run_test:
+        assert os.path.isdir(test_data_dir), "Testing data directory does not exist: %s" %test_data_dir
+        print(f"Loading testing data from {test_data_dir}")
+        test_loader = get_loader(data_dir=test_data_dir, is_validation=True)
+    if run_batch_test:
         assert os.path.isdir(test_data_dir), "Testing data directory does not exist: %s" %test_data_dir
         print(f"Loading testing data from {test_data_dir}")
         test_loader = get_loader(data_dir=test_data_dir, is_validation=True)

@@ -23,14 +23,23 @@ class Trainer():
         self.archive_code = cfgs.get('archive_code', True)
         self.checkpoint_name = cfgs.get('checkpoint_name', None)
         self.test_result_dir = cfgs.get('test_result_dir', None)
+        # for new method: load obj file
         self.load_obj = cfgs.get('load_obj', False)
+        # for batch
+        self.test_batch_data_dir_root = cfgs.get('test_batch_data_dir_root','')
+        self.test_result_dir_root = cfgs.get('test_result_dir_root','')
+        self.run_batch_test = cfgs.get('run_batch_test', False)
+        #
         self.cfgs = cfgs
 
         self.metrics_trace = meters.MetricsTrace()
         self.make_metrics = lambda m=None: meters.StandardMetrics(m)
         self.model = model(cfgs)
         self.model.trainer = self
-        self.train_loader, self.val_loader, self.test_loader = get_data_loaders(cfgs,False)
+
+        # if not batch test, get data loader at first
+        if  self.run_batch_test == False:
+            self.train_loader, self.val_loader, self.test_loader = get_data_loaders(cfgs,False)
 
     def load_checkpoint(self, optim=True):
         """Search the specified/latest checkpoint in checkpoint_dir and load the model and optimizer."""
@@ -84,6 +93,30 @@ class Trainer():
 
         score_path = os.path.join(self.test_result_dir, 'eval_scores.txt')
         self.model.save_scores(score_path)
+
+    # auto batch test for multiple cases
+    def auto_batch_test(self):
+        """Perform batch testing."""
+        self.model.to_device(self.device)
+        self.current_epoch = self.load_checkpoint(optim=False)
+        
+        if os.path.isdir(self.test_batch_data_dir_root):
+            for folderName in os.listdir(self.test_batch_data_dir_root):
+                print("folderName",folderName)
+                print("test_batch_data_dir_root",self.test_batch_data_dir_root)
+                test_data_dir = os.path.join(self.test_batch_data_dir_root,folderName)
+                # rename input data to results
+                self.test_result_dir = os.path.join(self.test_result_dir_root, folderName.replace('Data','Results'))
+                # re-assign input data dir
+                self.cfgs['test_data_dir'] = test_data_dir
+                print("dirrrrr",self.cfgs.get('test_data_dir'))
+                # reload data
+                _, _, self.test_loader = get_data_loaders(self.cfgs,False)
+
+                print(f"Saving testing results to {self.test_result_dir}")
+
+                with torch.no_grad():
+                    m = self.run_epoch(self.test_loader, epoch=self.current_epoch, is_test=True)
 
     def train(self):
         """Perform training."""

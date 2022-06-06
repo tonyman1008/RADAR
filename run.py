@@ -16,9 +16,13 @@ cfgs = setup_runtime(args)
 trainer = Trainer(cfgs, Derenderer)
 run_train = cfgs.get('run_train', False)
 run_test = cfgs.get('run_test', False)
+run_batch_test = cfgs.get('run_batch_test',False)
 
 ## run
 if run_train:
     trainer.train()
 if run_test:
     trainer.test()
+if run_batch_test:
+    print("run batch")
+    trainer.auto_batch_test()
