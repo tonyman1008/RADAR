@@ -24,7 +24,7 @@ def sampleView(objPath,output_dir):
     fov = 10
     ori_z = 12.5
     world_ori=[0,0,ori_z] ## make sure the camera pose is the same
-    sor_circum = 24
+    sor_circum = 24 # oringal 3sweep data sor_circum
     tx_size = 32
     
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True)
@@ -74,7 +74,7 @@ def subdivide(vertices,sor_circum):
             set = torch.stack([vertices[i,j,:],mid_point],0).to(vertices.device)
             new_vertices = torch.cat([new_vertices,set],0)
         
-        ## middle row (between row and row)
+        ## append middle row (between row and row)
         if i != rad_height-1:
             
             for k in range(sor_circum):
@@ -179,13 +179,13 @@ if __name__ == '__main__':
 
     date = datetime.today().strftime('%Y%m%d')
 
-    rootDir = '3SweepData/TestData_Thesis_20220602'
-    outputRootDir = 'data'
-    outputFolderSuffix = 'subdivision'
+    rootDir = '3SweepData/TestData_20220607'
+    outputRootDir = 'data/TestData_20220607_fulltt'
+    outputFolderSuffix = 'full'
 
     for file in os.listdir(rootDir):
         folderPath = os.path.join(rootDir,file)
-        outputFolderName= 'TestData_'+date+"_"+file+"_"+outputFolderSuffix
+        outputFolderName= 'TestData_'+date+"_"+outputFolderSuffix+"_"+file
         outputDir = os.path.join(outputRootDir,outputFolderName)
         if os.path.isdir(folderPath):
             for objPath in sorted(glob(os.path.join(folderPath,'*.obj'),recursive=True)):

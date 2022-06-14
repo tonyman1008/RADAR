@@ -1,17 +1,17 @@
 ## test met vase
 ## trainer
 run_test: true
-batch_size: 1
+batch_size: 1 # need to be 1, component by component(extracted from full object)
 checkpoint_dir: officialResults/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir: results/TestResults_20220530_spout_vase
+test_result_dir: results/TestResults_20220607_full_spout_vase
 
 ## dataloader
 image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_data_dir: data/TestData_20220508_spout_vase
+test_data_dir: data/TestData_20220607_full/TestData_20220607_full_spout_vase
 
 ## parameter
 load_obj: true # if false => run original method

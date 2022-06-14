@@ -138,7 +138,9 @@ def main(in_dir, out_dir):
 
 
 if __name__ == '__main__':
-    in_dir = 'original_method_results/TestResults_20220505_mic'
+
+    # single test
+    in_dir = 'original_method_results/TestResults_20220604'
     out_dir = os.path.join(in_dir,'animations')
     # out_dir = 'results/TestResults_20220425_horn_1/animations'
     main(in_dir, out_dir)

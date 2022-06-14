@@ -24,5 +24,4 @@ if run_train:
 if run_test:
     trainer.test()
 if run_batch_test:
-    print("run batch")
     trainer.auto_batch_test()

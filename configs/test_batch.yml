@@ -11,7 +11,7 @@ image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_batch_data_dir_root: data/TestData_20220606_batch_test
+test_batch_data_dir_root: data/TestData_20220607_fulltt
 
 ## parameter
 load_obj: true # if false => run original method

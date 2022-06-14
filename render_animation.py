@@ -50,10 +50,8 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
         ## rotate y-axis first then rotate x-axis
         rxyz = torch.stack([rx*0, ry, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
         sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, None)
-        rxyz = torch.stack([rx*0, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
-
-        ## rendering multiple objects test
-        sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
+        # rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+        # sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
 
         ## render each components texture
         tex_im_list = []
@@ -146,6 +144,7 @@ def main(in_dir, out_dir):
     device = 'cuda:0'
 
     sor_circum = 48 # set sor_circum to 48 fit 3sweep object(after subdivision)
+
     image_size = 256
     tex_im_h = 256
     tex_im_w = 768 ## 256*3 => 3 times width of texture
@@ -212,13 +211,23 @@ def main(in_dir, out_dir):
         spec_alpha_list.append(spec_alpha)
         spec_albedo_list.append(spec_albedo)
 
-        ## replicate albedo
+        ## replicate albedo (method 1)
+        # albedo = rendering.gamma(albedo)
+        # wcrop_ratio = 1/6
+        # wcrop_tex_im = int(wcrop_ratio * tex_im_w//2)
+        # p = 8 # padding
+        # front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3) 
+        # albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
+        
+        ## symmetry replicate albedo (method 2)
+        albedo = rendering.gamma(albedo)
         wcrop_ratio = 1/6
         wcrop_tex_im = int(wcrop_ratio * tex_im_w//2)
-        albedo = rendering.gamma(albedo)
-        p = 8
-        front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3)
-        albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
+        p = 8 # padding => to avoid the albedo image boundary line
+        front_albedo = torch.cat([albedo[:,:,:,p:p+wcrop_tex_im].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-(wcrop_tex_im+p):-p].flip(3)], 3)  # 256+64+64
+        # front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3) 
+        albedo_replicated = torch.cat([ front_albedo, front_albedo.flip(3)], 3) 
+
         albedo_replicated_list.append(albedo_replicated)
         utils.save_images(out_dir, albedo_replicated.cpu().numpy(), suffix='albedo_replicated', sep_folder=True)
         utils.save_images(out_dir, front_albedo.cpu().numpy(), suffix='front_albedo', sep_folder=True)
@@ -269,12 +278,12 @@ def main(in_dir, out_dir):
 if __name__ == '__main__':
 
     ## auto batch test
-    for in_dir in glob('results/TestResults_20220524*'):
+    for in_dir in glob('results/TestResults_20220613_noSubdivide*'):
         print("===Run data dir: "+in_dir+" ===")
-        out_dir = os.path.join(in_dir,'animations')
+        out_dir = os.path.join(in_dir,'animations_horizontalRotate')
         main(in_dir, out_dir)
-        ("===Finished data dir: "+in_dir+" ===")
-
+        print("===Finished data dir: "+in_dir+" ===")
+    print("===All rendering is finished !!!! ===")
     ## single test
     # in_dir = 'results/TestResults_20220508_ADA6051'
     # out_dir = os.path.join(in_dir,'animations')

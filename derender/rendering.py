@@ -320,12 +320,13 @@ def render_sor_multiObject(renderer, sor_vtx, sor_faces,radcol_height_list, tex_
         else:
             tx_cube = torch.nn.functional.grid_sample(tex_im_list[i], tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
         tx_cube = tx_cube.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
-
+        
         ## concat
         tx_cube_object = torch.cat([tx_cube_object,tx_cube],1)
 
     sor_vtx = sor_vtx.reshape(b,-1,3)
     sor_faces = sor_faces.reshape(b,-1,3)
+    
 
     # print("sor_vtx",sor_vtx.shape)
     # print("sor_faces",sor_faces.shape)
@@ -446,7 +447,7 @@ def render_object_shape(renderer,sor_vtx_origin, sor_faces,normalize=True):
     b, _, H_, T_, _ = sor_faces.shape
 
     texture = torch.ones(b,H_*T_*2,tx_size,tx_size,tx_size,3).to(sor_faces.device)
-    sor_vtx = torch.tensor(sor_vtx_origin).to(sor_vtx_origin.device)
+    sor_vtx = sor_vtx_origin.clone().detach().to(sor_vtx_origin.device)
     
     if normalize == True:
         sor_vtx = normalizeObjVertices(sor_vtx)

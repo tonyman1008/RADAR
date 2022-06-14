@@ -8,8 +8,11 @@
 *.zip
 *.pth
 /officialTestData
+/original_method_data
+/original_method_results
 /3SweepData
 *.tar
+.viminfo
 
 
 # Byte-compiled / optimized / DLL files
