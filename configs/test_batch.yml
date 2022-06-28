@@ -1,17 +1,20 @@
+## test command below
+## python run.py --config configs/test_batch.yml --gpu 0 --num_workers 4
+
 ## batch test met vase
 ## trainer
 run_batch_test: true
 batch_size: 1 # need to be 1, component by component(extracted from full object)
 checkpoint_dir: officialResults/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
-test_result_dir_root: results
+test_result_dir_root: results/TestResults_20220628_Texture512Test
 
 ## dataloader
 image_size: 256
 load_gt_mask: false
 paired_data_dir_names: ['images', 'masks']
 paired_data_filename_diff: ['im_rendered', 'mask_rendered']
-test_batch_data_dir_root: data/TestData_20220607_fulltt
+test_batch_data_dir_root: data/TestData_20220627_frontBackTextureTest
 
 ## parameter
 load_obj: true # if false => run original method
@@ -19,8 +22,8 @@ images_obj_dnames: ['images','objs']
 
 ## model
 model_name: derender_vase
-radcol_height: 32 
-sor_circum: 48 # need to fit input obj data
+radcol_height: 32 # not need in use obj method
+sor_circum: 96 # need to fit input obj data
 tex_im_h: 256
 tex_im_w: 768
 min_hscale: 0.5

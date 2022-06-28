@@ -2,6 +2,10 @@ import argparse
 import torch
 from derender import setup_runtime, Trainer, Derenderer
 
+## processing time
+start = torch.cuda.Event(enable_timing=True)
+end = torch.cuda.Event(enable_timing=True)
+start.record()
 
 ## runtime arguments
 parser = argparse.ArgumentParser(description='Training configurations.')
@@ -25,3 +29,7 @@ if run_test:
     trainer.test()
 if run_batch_test:
     trainer.auto_batch_test()
+
+end.record()
+torch.cuda.synchronize()
+print("===Processing time: {} secs===".format(start.elapsed_time(end)/1000))

@@ -1,3 +1,6 @@
+## test command below
+## python run.py --config configs/test.yml --gpu 0 --num_workers 4
+
 ## test met vase
 ## trainer
 run_test: true

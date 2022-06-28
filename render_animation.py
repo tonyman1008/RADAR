@@ -37,8 +37,8 @@ def load_obj(flist):
     return vertices_all,faces_all
 
 def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo_list, env_map_all, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size):
-    b = canon_sor_vtx.size(0)
     print("====render novel view animation====",)
+    b = canon_sor_vtx.size(0)
     s = 80 # sample number
     rxs = torch.linspace(0, np.pi/3, s//2) # rotation x axis (roll)
     rxs = torch.cat([rxs, rxs.flip(0)], 0) # rotation x axis back to origin pose
@@ -50,8 +50,8 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
         ## rotate y-axis first then rotate x-axis
         rxyz = torch.stack([rx*0, ry, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
         sor_vtx = rendering.transform_pts(canon_sor_vtx, rxyz, None)
-        # rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
-        # sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
+        rxyz = torch.stack([rx, ry*0, rx*0], 0).unsqueeze(0).to(canon_sor_vtx.device)
+        sor_vtx = rendering.transform_pts(sor_vtx, rxyz, None)
 
         ## render each components texture
         tex_im_list = []
@@ -141,24 +141,25 @@ def render_original_shape_multiObject(renderer,  canon_sor_vtx, sor_faces):
     return ims
 
 def main(in_dir, out_dir):
+    
     device = 'cuda:0'
-
-    sor_circum = 48 # set sor_circum to 48 fit 3sweep object(after subdivision)
+    
+    sor_circum = 96 # set sor_circum to 48 fit 3sweep object(after subdivision)
 
     image_size = 256
     tex_im_h = 256
-    tex_im_w = 768 ## 256*3 => 3 times width of texture
+    tex_im_w = 512 ## 256*3 => 3 times width of texture
     env_map_h = 16
     env_map_w = 48
     fov = 10  # in degrees
     ori_z = 12.5 # camera z-axis orientation
     world_ori = [0,0,ori_z] 
-    tx_size = 16 # texture sample grid size (Neural renderer)
+    tx_size = 8 # texture sample grid size (Neural renderer)
     cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
-
     apply_origin_vertices = True # apply the origin vertices from 3-Sweep
     batch_size = 1 # for multiObject, so fix 1
-
+    
+    
     renderer = rendering.get_renderer(world_ori=world_ori, image_size=image_size,fov=fov, fill_back=True, device='cuda:0')
     
     ## load sor,rad_height. (data type: sor_curve_all => tensor, radcol_height_list => list)
@@ -171,6 +172,9 @@ def main(in_dir, out_dir):
     mask_gt_all = load_imgs(sorted(glob(os.path.join(in_dir, 'mask_gt/*_mask_gt.png'), recursive=True)))
     env_map_all = load_imgs(sorted(glob(os.path.join(in_dir, 'env_map/*_env_map.png'), recursive=True)))[:,0,:,:]
     vertices_obj_all,faces_obj_all = load_obj(sorted(glob(os.path.join(in_dir, 'obj_parsed/*_obj_parsed.obj'), recursive=True)))
+
+    ## double texture test
+    albedo_2_all = load_imgs(sorted(glob(os.path.join(in_dir, 'albedo_map_2/*_albedo_map.png'), recursive=True)))
 
     component_num = len(radcol_height_list)
     print("total components num of this object",component_num)
@@ -197,6 +201,7 @@ def main(in_dir, out_dir):
         sor_curve = sor_curve_all[index_start:index_end].to(device)
         material = material_all[i:i+1].to(device)
         albedo = albedo_all[i:i+1].to(device)
+        albedo_2 = albedo_2_all[i:i+1].to(device)
         
         ## calculate paramter
         vertices_size = radcol_height_list[i]*sor_circum # for indexing
@@ -219,24 +224,32 @@ def main(in_dir, out_dir):
         # front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3) 
         # albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
         
+
         ## symmetry replicate albedo (method 2)
         albedo = rendering.gamma(albedo)
         wcrop_ratio = 1/6
-        wcrop_tex_im = int(wcrop_ratio * tex_im_w//2)
+        wcrop_tex_im = int(wcrop_ratio * tex_im_w//2) ## 768 / 2 / 6 = 64
         p = 8 # padding => to avoid the albedo image boundary line
         front_albedo = torch.cat([albedo[:,:,:,p:p+wcrop_tex_im].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-(wcrop_tex_im+p):-p].flip(3)], 3)  # 256+64+64
-        # front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3) 
-        albedo_replicated = torch.cat([ front_albedo, front_albedo.flip(3)], 3) 
+
+        ## double texture test
+        albedo_2 = rendering.gamma(albedo_2)
+        front_albedo_2 = torch.cat([albedo_2[:,:,:,p:p+wcrop_tex_im].flip(3), albedo_2[:,:,:,p:-p], albedo_2[:,:,:,-(wcrop_tex_im+p):-p].flip(3)], 3)  # 256+64+64
+
+        albedo_replicated = torch.cat([ front_albedo, front_albedo_2], 3) 
+        # albedo_replicated = torch.cat([ albedo, albedo_2], 3) 
+        print("albedo_replicated",albedo_replicated.shape)
 
         albedo_replicated_list.append(albedo_replicated)
         utils.save_images(out_dir, albedo_replicated.cpu().numpy(), suffix='albedo_replicated', sep_folder=True)
         utils.save_images(out_dir, front_albedo.cpu().numpy(), suffix='front_albedo', sep_folder=True)
-
+    
     ## get sor_faces with all component
     sor_faces = rendering.get_sor_full_face_idx_multiObject(radcol_height_list, sor_circum).to(device)  # 2x(H-1)xWx3
 
     ## normalize from NR loadObj
     vertices_obj_all_normalized = utils.normalizeObjVertices(vertices_obj_all)
+    
 
     ## get sor vertices data
     for i in range(len(radcol_height_list)):
@@ -247,6 +260,7 @@ def main(in_dir, out_dir):
 
         ## concate to fit RADAR data dimension
         canon_sor_vtx_obj = torch.cat([canon_sor_vtx_obj,vertices_component_normalized],1)
+    
 
     ## test for relighting
     rxyz = pose[:,:3] / 180 * np.pi # 1x3
@@ -259,7 +273,6 @@ def main(in_dir, out_dir):
         sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx_obj, rxyz, txyz)
     else:
         sor_vtx_relighting = rendering.transform_pts(canon_sor_vtx, rxyz, txyz)
-
     with torch.no_grad():
         if apply_origin_vertices == True :
             novel_views = render_views_multiObject(renderer, cam_loc, canon_sor_vtx_obj, sor_faces, albedo_replicated_list, env_map_all, spec_alpha_list, spec_albedo_list,radcol_height_list, tx_size)
@@ -277,15 +290,24 @@ def main(in_dir, out_dir):
 
 if __name__ == '__main__':
 
+    ## processing time
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+
+    rootDir = 'results/TestResults_20220628_symmetryTextureTest'
+
     ## auto batch test
-    for in_dir in glob('results/TestResults_20220613_noSubdivide*'):
-        print("===Run data dir: "+in_dir+" ===")
-        out_dir = os.path.join(in_dir,'animations_horizontalRotate')
+    for folderName in os.listdir(rootDir):
+        print("===Run data dir: "+folderName+" ===")
+
+        in_dir = os.path.join(rootDir,folderName)
+        out_dir = os.path.join(in_dir,'animations_symmetryTextureTest')
         main(in_dir, out_dir)
-        print("===Finished data dir: "+in_dir+" ===")
+
+        print("===Finished data dir: "+folderName+" ===")
+
+    end.record()
+    torch.cuda.synchronize()
+    print("===Processing time: {} secs===".format(start.elapsed_time(end)/1000))
     print("===All rendering is finished !!!! ===")
-    ## single test
-    # in_dir = 'results/TestResults_20220508_ADA6051'
-    # out_dir = os.path.join(in_dir,'animations')
-    # out_dir = 'results/TestResults_20220425_horn_1/animations'
-    # main(in_dir, out_dir)

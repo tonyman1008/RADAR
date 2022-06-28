@@ -8,7 +8,6 @@ import trimesh
 from glob import glob
 from datetime import datetime
 
-
 def sampleView(objPath,output_dir):
 
     ## initial setting
@@ -36,20 +35,26 @@ def sampleView(objPath,output_dir):
     radcol_height = vertices.shape[0] // sor_circum
     vertices, faces, textures = parse3SweepObjData(radcol_height,sor_circum,vertices,faces,textures)
 
-    ## taubin smoothing
-    vertices_smooth, face_smooth = taubin_smooth_trimesh(vertices,faces,device)
-
-    ## mid-point subdivision
-    vertices_subdivision, faces_subdivision,new_sor_cirum = subdivide(vertices_smooth,sor_circum)
-    vertices_subdivision, faces_subdivision,new_sor_cirum = subdivide(vertices_subdivision,new_sor_cirum)
-    
-    ## sample front view with straight axis object
+    ## sample front view with straight axis object at first
     sor_curve = rendering.get_straight_sor_curve(radcol_height,device)
     canon_sor_vtx = rendering.get_sor_vtx(sor_curve, sor_circum) # BxHxTx3
     images = renderer.render_rgb(canon_sor_vtx.reshape(1,-1,3), faces[None, :, :], textures[None, :, :, :, :, :])
 
+    ###--- preprocess the model--- ###
+    ## taubin smoothing - 1
+    vertices, faces = taubin_smooth_trimesh(vertices,faces,device)
+
+    ## mid-point subdivision - 1
+    vertices, faces,sor_circum = subdivide_horizontal(vertices,sor_circum)
+
+    ## taubin smoothing - 2
+    vertices, faces = taubin_smooth_trimesh(vertices,faces,device)
+
+    ## mid-point subdivision - 2
+    vertices, faces,sor_circum = subdivide_horizontal(vertices,sor_circum)
+    
     # ## save the final data
-    utils.save_images_objs_pair_data(output_dir,images.detach().cpu().numpy(),vertices_subdivision,faces_subdivision,objName)
+    utils.save_images_objs_pair_data(output_dir,images.detach().cpu().numpy(),vertices,faces,objName)
     print("==== Data path "+ objRootFolderName +" component "+ objName + " sample view finished ====")
 
 
@@ -74,17 +79,17 @@ def subdivide(vertices,sor_circum):
             set = torch.stack([vertices[i,j,:],mid_point],0).to(vertices.device)
             new_vertices = torch.cat([new_vertices,set],0)
         
-        # ## append middle row (between row and row)
-        # if i != rad_height-1:
+        ## append middle row (between row and row)
+        if i != rad_height-1:
             
-        #     for k in range(sor_circum):
-        #         left_point = (vertices[i,k,:] + vertices[i+1,k,:]) * 0.5
-        #         next_point_index = 0 if k == sor_circum-1 else k+1
-        #         right_point = (vertices[i,next_point_index,:] + vertices[i+1,next_point_index,:]) * 0.5
-        #         mid_point = (left_point + right_point) *0.5
-        #         # 3 element for a set
-        #         set = torch.stack([left_point,mid_point],0)
-        #         new_vertices = torch.cat([new_vertices,set],0)
+            for k in range(sor_circum):
+                left_point = (vertices[i,k,:] + vertices[i+1,k,:]) * 0.5
+                next_point_index = 0 if k == sor_circum-1 else k+1
+                right_point = (vertices[i,next_point_index,:] + vertices[i+1,next_point_index,:]) * 0.5
+                mid_point = (left_point + right_point) *0.5
+                # 3 element for a set
+                set = torch.stack([left_point,mid_point],0)
+                new_vertices = torch.cat([new_vertices,set],0)
 
     ## get new faces indexing
     new_faces = rendering.get_sor_full_face_idx(new_rad_height,new_sor_cirum)
@@ -93,6 +98,33 @@ def subdivide(vertices,sor_circum):
 
     return new_vertices,new_faces,new_sor_cirum
 
+## one to two subdivision (horizontal) ***test
+def subdivide_horizontal(vertices,sor_circum):
+
+    rad_height = vertices.shape[0] // sor_circum
+    new_sor_cirum = sor_circum * 2 # increase the horizontal vertices
+    new_rad_height = rad_height # the height is the same
+
+    vertices = vertices.reshape(rad_height,sor_circum,3)
+
+    ## subdivide vertices
+    new_vertices = torch.tensor([]).to(vertices.device)
+    for i in range(rad_height):
+
+        ## original row (append index)
+        for j in range(sor_circum):
+            next_point_index = 0 if j== sor_circum-1 else j+1
+            mid_point = (vertices[i,j,:] + vertices[i,next_point_index,:]) * 0.5
+            # 2 element for a set
+            set = torch.stack([vertices[i,j,:],mid_point],0).to(vertices.device)
+            new_vertices = torch.cat([new_vertices,set],0)
+
+    ## get new faces indexing
+    new_faces = rendering.get_sor_full_face_idx(new_rad_height,new_sor_cirum)
+    new_vertices = new_vertices.reshape(-1,3)
+    new_faces = new_faces.reshape(-1,3)
+
+    return new_vertices,new_faces,new_sor_cirum
 
 ## taubin smooth using trimesh library
 def taubin_smooth_trimesh(vertices,faces,device):
@@ -177,13 +209,19 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 
 if __name__ == '__main__':
 
-    date = datetime.today().strftime('%Y%m%d')
+    # date = datetime.today().strftime('%Y%m%d')
+    date = '20220627'
 
-    rootDir = '3SweepData/TestData_20220614'
-    outputRootDir = 'data/TestData_20220614_testSubdivide'
-    outputFolderSuffix = 'testSubdivide'
+    rootDir = '3SweepData/TestData_20220627_frontBackTextureTest'
+    outputRootDir = 'data/TestData_20220627_frontBackTextureTest'
+    outputFolderSuffix = 'frontBackTextureTest'
 
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    totalTime = 0
+    caseNum = 0
     for file in os.listdir(rootDir):
+        start.record()
         folderPath = os.path.join(rootDir,file)
         outputFolderName= 'TestData_'+date+"_"+outputFolderSuffix+"_"+file
         outputDir = os.path.join(outputRootDir,outputFolderName)
@@ -191,4 +229,11 @@ if __name__ == '__main__':
             for objPath in sorted(glob(os.path.join(folderPath,'*.obj'),recursive=True)):
                 sampleView(objPath,outputDir)
 
+        end.record()
+        torch.cuda.synchronize()
+        singleProcesstime = start.elapsed_time(end)/1000
+        caseNum += 1
+        totalTime += singleProcesstime
+
+    print("===Average preprocessing time = {} secs===".format(totalTime/caseNum))
     print("====Sample View Complete !!! =====")
