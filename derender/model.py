@@ -57,9 +57,7 @@ class Derenderer():
 
         ## networks and optimizers
         self.lr = cfgs.get('lr', 1e-4)
-        if self.load_obj == True:
-            self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=32, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
-        else:
+        if self.load_obj == False:
             self.netR = SoRNet(cin=3, cout2=5, in_size=self.image_size, out_size=self.radcol_height, zdim=128, nf=64, activation=nn.Sigmoid)  # radius column, height scale, rx, rz, tx, ty
         self.netT = UnetGenerator(input_nc=3, output_nc=3, num_downs=6, ngf=64, norm_layer=nn.InstanceNorm2d, use_dropout=False, f_act=nn.Tanh)
         self.netE = EnvMapNet(cin=6, cout=1, cout2=2, in_size=self.image_size, out_size=self.env_map_h, nf=64, zdim=128, activation=nn.Sigmoid)  # spec_alpha, spec_albedo
@@ -288,6 +286,7 @@ class Derenderer():
 
         return metrics
 
+    # new method, use obj model to replace predicted model.
     def forward_with_obj(self, input):
         print("====forward_with_obj====")
         if isinstance(input, tuple) or isinstance(input, list):

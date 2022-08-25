@@ -68,7 +68,7 @@ def render_views_multiObject(renderer, cam_loc, canon_sor_vtx, sor_faces, albedo
             tex_im_list.append(tex_im)
 
         ## render each components reconstrction image
-        im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size, dim_inside=False).clamp(0, 1)
+        im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
@@ -111,8 +111,9 @@ def render_relight_multiObject(renderer, cam_loc, sor_vtx, sor_faces, albedo_lis
             diffuse, specular = rendering.envmap_phong_shading(sor_vtx_map, normal_map, cam_loc, env_map, spec_alpha)
             tex_im = rendering.compose_shading(albedo_list[j], diffuse, spec_albedo.view(b,1,1,1), specular).clamp(0,1)
             tex_im_list.append(tex_im)
+            
 
-        im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size, dim_inside=False).clamp(0, 1)
+        im_rendered = rendering.render_sor_multiObject(renderer, sor_vtx, sor_faces.repeat(b,1,1,1,1),radcol_height_list, tex_im_list, tx_size=tx_size).clamp(0, 1)
         ims += [im_rendered]
     ims = torch.stack(ims, 1)  # BxTxCxHxW
     return ims
@@ -148,13 +149,13 @@ def main(in_dir, out_dir):
 
     image_size = 256
     tex_im_h = 256
-    tex_im_w = 512 ## 256*3 => 3 times width of texture
+    tex_im_w = 768 ## 256*3 => 3 times width of texture
     env_map_h = 16
     env_map_w = 48
     fov = 10  # in degrees
     ori_z = 12.5 # camera z-axis orientation
     world_ori = [0,0,ori_z] 
-    tx_size = 8 # texture sample grid size (Neural renderer)
+    tx_size = 16 # texture sample grid size (Neural renderer)
     cam_loc = torch.FloatTensor([0,0,-ori_z]).to(device) # camera position
     apply_origin_vertices = True # apply the origin vertices from 3-Sweep
     batch_size = 1 # for multiObject, so fix 1
@@ -172,9 +173,6 @@ def main(in_dir, out_dir):
     mask_gt_all = load_imgs(sorted(glob(os.path.join(in_dir, 'mask_gt/*_mask_gt.png'), recursive=True)))
     env_map_all = load_imgs(sorted(glob(os.path.join(in_dir, 'env_map/*_env_map.png'), recursive=True)))[:,0,:,:]
     vertices_obj_all,faces_obj_all = load_obj(sorted(glob(os.path.join(in_dir, 'obj_parsed/*_obj_parsed.obj'), recursive=True)))
-
-    ## double texture test
-    albedo_2_all = load_imgs(sorted(glob(os.path.join(in_dir, 'albedo_map_2/*_albedo_map.png'), recursive=True)))
 
     component_num = len(radcol_height_list)
     print("total components num of this object",component_num)
@@ -201,7 +199,7 @@ def main(in_dir, out_dir):
         sor_curve = sor_curve_all[index_start:index_end].to(device)
         material = material_all[i:i+1].to(device)
         albedo = albedo_all[i:i+1].to(device)
-        albedo_2 = albedo_2_all[i:i+1].to(device)
+        # albedo_2 = albedo_2_all[i:i+1].to(device)
         
         ## calculate paramter
         vertices_size = radcol_height_list[i]*sor_circum # for indexing
@@ -216,29 +214,14 @@ def main(in_dir, out_dir):
         spec_alpha_list.append(spec_alpha)
         spec_albedo_list.append(spec_albedo)
 
-        ## replicate albedo (method 1)
-        # albedo = rendering.gamma(albedo)
-        # wcrop_ratio = 1/6
-        # wcrop_tex_im = int(wcrop_ratio * tex_im_w//2)
-        # p = 8 # padding
-        # front_albedo = torch.cat([albedo[:,:,:,p:2*p].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-2*p:-p].flip(3)], 3) 
-        # albedo_replicated = torch.cat([front_albedo[:,:,:,:wcrop_tex_im].flip(3), front_albedo, front_albedo.flip(3), front_albedo[:,:,:,:-wcrop_tex_im]], 3)
-        
-
         ## symmetry replicate albedo (method 2)
         albedo = rendering.gamma(albedo)
         wcrop_ratio = 1/6
         wcrop_tex_im = int(wcrop_ratio * tex_im_w//2) ## 768 / 2 / 6 = 64
         p = 8 # padding => to avoid the albedo image boundary line
-        front_albedo = torch.cat([albedo[:,:,:,p:p+wcrop_tex_im].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-(wcrop_tex_im+p):-p].flip(3)], 3)  # 256+64+64
+        front_albedo = torch.cat([albedo[:,:,:,p:p*2+wcrop_tex_im].flip(3), albedo[:,:,:,p:-p], albedo[:,:,:,-(wcrop_tex_im+p*2):-p].flip(3)], 3)  # 252+66+66 = 384
+        albedo_replicated = torch.cat([ front_albedo, front_albedo.flip(3)], 3) 
 
-        ## double texture test
-        albedo_2 = rendering.gamma(albedo_2)
-        front_albedo_2 = torch.cat([albedo_2[:,:,:,p:p+wcrop_tex_im].flip(3), albedo_2[:,:,:,p:-p], albedo_2[:,:,:,-(wcrop_tex_im+p):-p].flip(3)], 3)  # 256+64+64
-
-        albedo_replicated = torch.cat([ front_albedo, front_albedo_2], 3) 
-        # albedo_replicated = torch.cat([ albedo, albedo_2], 3) 
-        print("albedo_replicated",albedo_replicated.shape)
 
         albedo_replicated_list.append(albedo_replicated)
         utils.save_images(out_dir, albedo_replicated.cpu().numpy(), suffix='albedo_replicated', sep_folder=True)
@@ -261,7 +244,6 @@ def main(in_dir, out_dir):
         ## concate to fit RADAR data dimension
         canon_sor_vtx_obj = torch.cat([canon_sor_vtx_obj,vertices_component_normalized],1)
     
-
     ## test for relighting
     rxyz = pose[:,:3] / 180 * np.pi # 1x3
     txy = pose[:,3:] # 1x2
@@ -295,14 +277,14 @@ if __name__ == '__main__':
     end = torch.cuda.Event(enable_timing=True)
     start.record()
 
-    rootDir = 'results/TestResults_20220628_symmetryTextureTest'
+    rootDir = 'results/TestResults_20220825_test'
 
     ## auto batch test
     for folderName in os.listdir(rootDir):
         print("===Run data dir: "+folderName+" ===")
 
         in_dir = os.path.join(rootDir,folderName)
-        out_dir = os.path.join(in_dir,'animations_symmetryTextureTest')
+        out_dir = os.path.join(in_dir,'animations')
         main(in_dir, out_dir)
 
         print("===Finished data dir: "+folderName+" ===")

@@ -163,7 +163,6 @@ def get_sor_vtx_normal(sor_vtx):
 
 def get_sor_quad_center_vtx(sor_vtx):
     ## shift to quad center for shading
-    #1x32x97x3
     sor_vtx = torch.cat([sor_vtx, sor_vtx[:,:,:1]], 2)  # Hx(T+1), connect last column to first
     sor_quad_center_vtx = torch.nn.functional.avg_pool2d(sor_vtx.permute(0,3,1,2), kernel_size=2, stride=1, padding=0).permute(0,2,3,1)
     return sor_quad_center_vtx  # Bx(H-1)xTx3
@@ -299,12 +298,8 @@ def get_renderer(world_ori=[0,0,1], image_size=128, fov=30, renderer_min_depth=0
                             background_color=[1.,1.,1.])
     return renderer
 
-# dim_inside : darkness inside texture?
 ### render sor shape with texture(final result)
-def render_sor_multiObject(renderer, sor_vtx, sor_faces,radcol_height_list, tex_im_list, tx_size=4, dim_inside=False, render_normal=False):
-    # print("====render_sor_multiObject====")
-    # print("sor_vtx",sor_vtx.shape)
-    # print("sor_faces",sor_faces.shape)
+def render_sor_multiObject(renderer, sor_vtx, sor_faces,radcol_height_list, tex_im_list, tx_size=4, render_normal=False):
 
     b, _, H_, T_, _ = sor_faces.shape
 
@@ -316,7 +311,6 @@ def render_sor_multiObject(renderer, sor_vtx, sor_faces,radcol_height_list, tex_
         if render_normal:
             tx_cube = torch.nn.functional.grid_sample(tex_im_list[i], tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="border", align_corners=False)  # Bx3xFxT^2
             tx_cube = tx_cube / (tx_cube**2).sum(1,keepdim=True)**0.5 /2+0.5
-
         else:
             tx_cube = torch.nn.functional.grid_sample(tex_im_list[i], tex_uv_grid.view(1,-1,tx_size*tx_size,2).repeat(b,1,1,1), mode='bilinear', padding_mode="reflection", align_corners=False)  # Bx3xFxT^2
         tx_cube = tx_cube.permute(0,2,3,1).view(b,-1,1,tx_size,tx_size,3).repeat(1,1,tx_size,1,1,1)  # BxFxtxtxtx3
@@ -326,37 +320,8 @@ def render_sor_multiObject(renderer, sor_vtx, sor_faces,radcol_height_list, tex_
 
     sor_vtx = sor_vtx.reshape(b,-1,3)
     sor_faces = sor_faces.reshape(b,-1,3)
-    
 
-    # print("sor_vtx",sor_vtx.shape)
-    # print("sor_faces",sor_faces.shape)
-    # print("tx_cube",tx_cube.shape)
-
-    ##TODO: dim_insdie UV error
-    if dim_inside:
-        # print("==dim inside True==")
-        fill_back = renderer.fill_back
-        renderer.fill_back = False
-        # print("tx_cube",tx_cube.shape)
-        # print("sor_faces",sor_faces.shape)
-        ## TODO: uv wrong
-        # sor_faces = torch.cat([sor_faces[:,:4704], sor_faces[:,:4704].flip(2),sor_faces[:,4704:],sor_faces[:,4704:].flip(2)], 1)
-        # tx_cube = torch.cat([tx_cube, (tx_cube*0.5)], 1)
-        # tx_cube2 = torch.cat([tx_cube2, (tx_cube2*0.5)], 1)
-        
-        # tx_cube=torch.cat([tx_cube,tx_cube2],1)
-
-        ## TODO:multi-obj
-        # tx_cube2 = torch.cat([tx_cube2, (tx_cube2*0.5).flip(1)], 1)
-        # tx_cube = torch.cat([tx_cube,tx_cube2],1)
-        # print("tx_cube2",tx_cube2.shape)
-        # print("final sor_faces",sor_faces.shape)
-        # print("final tx_cube",tx_cube.shape)
-
-        im_rendered = renderer.render_rgb(sor_vtx, sor_faces, tx_cube_object)
-        renderer.fill_back = fill_back
-    else:
-        im_rendered = renderer.render_rgb(sor_vtx,sor_faces, tx_cube_object)
+    im_rendered = renderer.render_rgb(sor_vtx,sor_faces, tx_cube_object)
     return im_rendered
 
 ### render sor shape with texture(final result)

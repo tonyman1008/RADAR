@@ -210,16 +210,17 @@ def parse3SweepObjData(radcol_height,sor_circum,vertices,faces=None,textures=Non
 if __name__ == '__main__':
 
     # date = datetime.today().strftime('%Y%m%d')
-    date = '20220627'
+    date = '20220825'
 
-    rootDir = '3SweepData/TestData_20220627_frontBackTextureTest'
-    outputRootDir = 'data/TestData_20220627_frontBackTextureTest'
-    outputFolderSuffix = 'frontBackTextureTest'
+    rootDir = '3SweepData/TestData_20220825_test'
+    outputRootDir = 'data/TestData_20220825_test'
+    outputFolderSuffix = 'full'
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     totalTime = 0
     caseNum = 0
+
     for file in os.listdir(rootDir):
         start.record()
         folderPath = os.path.join(rootDir,file)
@@ -229,11 +230,12 @@ if __name__ == '__main__':
             for objPath in sorted(glob(os.path.join(folderPath,'*.obj'),recursive=True)):
                 sampleView(objPath,outputDir)
 
+        # calculate preprocessing time
         end.record()
         torch.cuda.synchronize()
         singleProcesstime = start.elapsed_time(end)/1000
         caseNum += 1
         totalTime += singleProcesstime
 
-    print("===Average preprocessing time = {} secs===".format(totalTime/caseNum))
-    print("====Sample View Complete !!! =====")
+    print("=== Average preprocessing time = {} secs ===".format(totalTime/caseNum))
+    print("==== Sample View Complete !!! =====")

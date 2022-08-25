@@ -1,3 +1,6 @@
+## test command 
+## python run.py --config configs/test_original_method.yml --gpu 0 --num_workers 4
+
 ## test met vase
 ## trainer
 run_test: true
@@ -10,7 +13,7 @@ test_result_dir: original_method_results/TestResults_20220604
 image_size: 256
 load_gt_mask: false # if false => run origin method
 paired_data_dir_names: ['images', 'masks']
-test_data_dir: original_method_data/TestData_20220604
+test_data_dir: original_method_data/TestData_20220613
 
 ## model
 model_name: derender_vase
