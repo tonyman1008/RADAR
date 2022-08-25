@@ -1,0 +1,31 @@
+## single test command below
+## python run.py --config configs/test.yml --gpu 0 --num_workers 4
+
+## single test met vase
+## trainer
+run_test: true
+batch_size: 1 # need to be 1, component by component(extracted from full object)
+checkpoint_dir: pretrained/met_vase_pretrained
+checkpoint_name: checkpoint500.pth
+test_result_dir: results/TestResults_20220825_singleTest
+
+## dataloader
+image_size: 256
+test_data_dir: data/TestData_20220825_test/TestData_20220825_full_spout_vase
+
+## parameter
+load_obj: true # if false => run original method
+images_obj_dnames: ['images','objs']
+
+## model
+model_name: derender_vase
+sor_circum: 96 # need to fit input obj data
+tex_im_h: 256
+tex_im_w: 768
+env_map_h: 16
+env_map_w: 48
+
+## renderer
+fov: 10  # in degrees
+ori_z: 12.5
+tx_size: 16  # 4, 8, 16
