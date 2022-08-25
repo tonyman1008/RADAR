@@ -4,7 +4,7 @@
 ## batch test met vase
 run_batch_test: true
 batch_size: 1 # need to be 1, component by component(extracted from full object)
-checkpoint_dir: officialResults/met_vase_pretrained
+checkpoint_dir: pretrained/met_vase_pretrained
 checkpoint_name: checkpoint500.pth
 test_result_dir_root: results/TestResults_20220825_test
 
