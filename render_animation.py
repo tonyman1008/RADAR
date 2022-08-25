@@ -1,7 +1,5 @@
-from operator import truediv
 import os
 from glob import glob
-from pickle import TRUE
 import numpy as np
 import cv2
 import torch

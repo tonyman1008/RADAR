@@ -1,4 +1,3 @@
-from distutils import extension
 import neural_renderer as nr
 import os
 import torch
